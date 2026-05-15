@@ -20,3 +20,5 @@ yarn-error.log*
 .vscode/
 .idea/
 *.swp
+
+PLAN.md
