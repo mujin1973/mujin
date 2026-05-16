@@ -23,6 +23,8 @@
             </div>
 
             <div class="topbar-right">
+                <button type="button" id="logout-btn" class="btn btn-ghost-light">로그아웃</button>
+                <button type="button" id="history-toggle" class="btn btn-ghost-light">배포 이력</button>
                 <button type="button" id="apply-all" class="btn btn-secondary">전체 미리보기 적용</button>
                 <button type="button" id="save-all" class="btn btn-primary" disabled
                         title="저장하면 GitHub에 commit → mujin.im 반영까지 약 1~3분 소요">저장 (commit)</button>
@@ -55,6 +57,18 @@
                 </div>
             </section>
         </main>
+
+        <!-- 배포 이력 패널 -->
+        <div id="history-panel" class="history-panel" hidden>
+            <div class="history-panel-header">
+                <span class="history-panel-title">배포 이력 (최근 5개)</span>
+                <button type="button" id="history-close" class="icon-btn history-close-btn" aria-label="닫기">✕</button>
+            </div>
+            <div id="history-list" class="history-list">
+                <div class="history-loading">불러오는 중…</div>
+            </div>
+        </div>
+        <div id="history-backdrop" class="history-backdrop" hidden></div>
 
         <div id="toast" class="toast" hidden></div>
     </div>

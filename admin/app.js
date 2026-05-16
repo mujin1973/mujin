@@ -125,9 +125,18 @@ function cloneValue(v) {
 // 부트스트랩
 // ─────────────────────────────────────────────────────────────────
 
+async function handleLogout() {
+    try {
+        await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+        window.location.replace('/login');
+    }
+}
+
 async function bootstrap() {
     try {
         const res = await fetch(`/api/file/${TARGET_PATH}`, { credentials: 'same-origin' });
+        if (res.status === 401) { window.location.replace('/login'); return; }
         if (!res.ok) throw new Error(`GET /api/file 실패: ${res.status}`);
         const { content, sha } = await res.json();
 
@@ -147,6 +156,7 @@ async function bootstrap() {
         updateStatus();
 
         bindGlobalControls();
+        bindHistoryControls();
         loadSeoFiles();
     } catch (err) {
         console.error(err);
@@ -1585,6 +1595,7 @@ function handleShaConflict(msg) {
 function bindGlobalControls() {
     document.getElementById('apply-all').addEventListener('click', applyAllToPreview);
     document.getElementById('save-all').addEventListener('click', handleSave);
+    document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
     document.getElementById('sidebar-toggle').addEventListener('click', () => {
         document.querySelector('.workspace').classList.toggle('sidebar-collapsed');
@@ -1910,6 +1921,155 @@ function buildCollapsibleSection(title, startCollapsed = false) {
     section.appendChild(body);
 
     return section;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 배포 이력 패널
+// ─────────────────────────────────────────────────────────────────
+
+function bindHistoryControls() {
+    document.getElementById('history-toggle').addEventListener('click', openHistoryPanel);
+    document.getElementById('history-close').addEventListener('click', closeHistoryPanel);
+    document.getElementById('history-backdrop').addEventListener('click', closeHistoryPanel);
+}
+
+function openHistoryPanel() {
+    const panel = document.getElementById('history-panel');
+    const backdrop = document.getElementById('history-backdrop');
+    panel.hidden = false;
+    backdrop.hidden = false;
+    loadHistory();
+}
+
+function closeHistoryPanel() {
+    document.getElementById('history-panel').hidden = true;
+    document.getElementById('history-backdrop').hidden = true;
+}
+
+async function loadHistory() {
+    const list = document.getElementById('history-list');
+    list.innerHTML = '<div class="history-loading">불러오는 중…</div>';
+
+    try {
+        const res = await fetch(`/api/history?site=${SITE}`, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const commits = await res.json();
+        renderHistoryList(commits);
+    } catch (err) {
+        list.innerHTML = `<div class="history-error">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderHistoryList(commits) {
+    const list = document.getElementById('history-list');
+    if (!commits || commits.length === 0) {
+        list.innerHTML = '<div class="history-empty">이력이 없습니다.</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    commits.forEach((c, i) => {
+        const card = document.createElement('div');
+        card.className = 'history-card' + (i === 0 ? ' history-card-current' : '');
+
+        const dateStr = formatKSTDate(c.date);
+        const summaryLine = c.message.split('\n')[0];
+
+        card.innerHTML = `
+            <div class="history-card-meta">
+                <span class="history-date">${escapeHtml(dateStr)}</span>
+                ${i === 0 ? '<span class="history-current-badge">현재</span>' : ''}
+            </div>
+            <div class="history-message">${escapeHtml(summaryLine)}</div>
+            <div class="history-card-footer">
+                <span class="history-sha">${escapeHtml(c.shortSha)}</span>
+                <a class="history-gh-link" href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+                ${i !== 0 ? `<button type="button" class="btn btn-sm btn-danger-outline history-rollback-btn" data-sha="${escapeHtml(c.sha)}" data-date="${escapeHtml(dateStr)}">이 버전으로 되돌리기</button>` : ''}
+            </div>
+        `;
+
+        if (i !== 0) {
+            card.querySelector('.history-rollback-btn').addEventListener('click', () => {
+                confirmRollback(c.sha, dateStr);
+            });
+        }
+
+        list.appendChild(card);
+    });
+}
+
+function confirmRollback(targetSha, targetDate) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-dialog">
+            <h3 class="modal-title">버전 되돌리기</h3>
+            <p class="modal-body-text">
+                <strong>${escapeHtml(targetDate)}</strong> 버전으로 되돌립니다.<br>
+                현재 변경사항이 사라지지 않고, 선택한 버전이 새 commit으로 위에 쌓입니다.
+            </p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-danger" id="rollback-confirm-btn">되돌리기</button>
+                <button type="button" class="btn btn-ghost" id="rollback-cancel-btn">취소</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#rollback-cancel-btn').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#rollback-confirm-btn').addEventListener('click', async () => {
+        const btn = overlay.querySelector('#rollback-confirm-btn');
+        btn.disabled = true;
+        btn.textContent = '되돌리는 중…';
+        await executeRollback(targetSha, targetDate);
+        overlay.remove();
+    });
+}
+
+async function executeRollback(targetSha, targetDate) {
+    try {
+        const res = await fetch('/api/rollback', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                site: SITE,
+                targetSha,
+                currentSha: state.sha,
+                targetDate,
+            }),
+        });
+
+        if (res.status === 409) {
+            const data = await res.json().catch(() => ({}));
+            handleShaConflict(data.message || 'SHA 충돌');
+            closeHistoryPanel();
+            return;
+        }
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(text || `오류 ${res.status}`);
+        }
+
+        closeHistoryPanel();
+        toast('되돌리기 완료. 페이지를 다시 불러옵니다…');
+        setTimeout(() => bootstrap(), 1200);
+    } catch (err) {
+        toast(`되돌리기 실패: ${err.message}`);
+    }
+}
+
+function formatKSTDate(isoDate) {
+    try {
+        const d = new Date(isoDate);
+        return d.toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+        });
+    } catch {
+        return isoDate;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────
