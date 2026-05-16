@@ -42,7 +42,7 @@ const FIELD_LABELS = {
     'about.body2':               '본문 2단',
     'about.body3':               '본문 3단',
     'about.pull':                '인용구 (pull quote)',
-    'about.badges':              '인증 뱃지 리스트',
+    'about.badges':              '인증 및 협회 리스트',
     'consulting.bg':             '배경 이미지',
     'consulting.title':          '섹션 타이틀',
     'consulting.desc':           '설명',
@@ -129,7 +129,10 @@ function newCardId() { return `card-${++_cardIdSeq}`; }
 
 function extractCardFields(itemEl) {
     const fields = {};
-    itemEl.querySelectorAll('[data-edit-field]').forEach(el => {
+    const els = itemEl.hasAttribute('data-edit-field')
+        ? [itemEl, ...itemEl.querySelectorAll('[data-edit-field]')]
+        : itemEl.querySelectorAll('[data-edit-field]');
+    els.forEach(el => {
         const f = el.getAttribute('data-edit-field');
         if (f === 'img') {
             fields.img = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
@@ -150,7 +153,9 @@ function applyCardListToDoc(field) {
     Array.from(container.querySelectorAll('[data-edit-item]')).forEach(el => el.remove());
     entry.currentCards.forEach(card => {
         const newEl = entry.template.cloneNode(true);
-        const imgEl = newEl.querySelector('[data-edit-field="img"]');
+        const imgEl = newEl.getAttribute('data-edit-field') === 'img'
+            ? newEl
+            : newEl.querySelector('[data-edit-field="img"]');
         if (imgEl) {
             imgEl.setAttribute('src', card.fields.img?.src || '');
             imgEl.setAttribute('alt', card.fields.img?.alt || '');
