@@ -79,11 +79,17 @@ const state = {
     sha: null,                  // GitHub Contents API sha
     fields: new Map(),          // fieldName -> FieldEntry
     cardLists: new Map(),       // fieldName -> CardListEntry
-    initialValues: new Map(),   // fieldName -> 최초 로드 시 표시값 (dirty 비교용)
-    appliedValues: new Map(),   // fieldName -> 미리보기에 반영된 표시값 (pending 비교용)
+    initialValues: new Map(),   // fieldName -> 최초 로드 시 raw 값 (dirty 비교 + 모달 before 표시용)
+    appliedValues: new Map(),   // fieldName -> 미리보기에 반영된 raw 값 (pending 비교용)
     viewport: 'pc',
+    saving: false,
     lastSavedAt: null,
 };
+
+function cloneValue(v) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) return { ...v };
+    return v;
+}
 
 // FieldEntry: { section, prefixes:Set, elements:[{el, prefix}], currentValue, formPrefix }
 
@@ -175,8 +181,8 @@ function buildIndex() {
     state.fields.forEach((entry, field) => {
         entry.formPrefix = chooseFormPrefix(entry);
         entry.currentValue = readValue(entry, field);
-        state.initialValues.set(field, valueSignature(entry.currentValue));
-        state.appliedValues.set(field, valueSignature(entry.currentValue));
+        state.initialValues.set(field, cloneValue(entry.currentValue));
+        state.appliedValues.set(field, cloneValue(entry.currentValue));
     });
 }
 
@@ -716,8 +722,8 @@ function updateFieldFlags(fieldEl, field) {
     const flagsEl = fieldEl.querySelector('.field-flags');
     if (!flagsEl) return;
     const sig = valueSignature(entry.currentValue);
-    const isDirty = sig !== state.initialValues.get(field);
-    const isPending = sig !== state.appliedValues.get(field);
+    const isDirty = sig !== valueSignature(state.initialValues.get(field));
+    const isPending = sig !== valueSignature(state.appliedValues.get(field));
     flagsEl.innerHTML = '';
     if (isPending) flagsEl.innerHTML += '<span class="flag flag-pending">미반영</span>';
     if (isDirty)   flagsEl.innerHTML += '<span class="flag flag-dirty">변경됨</span>';
@@ -731,9 +737,9 @@ function applySectionToPreview(sectionKey) {
     let count = 0;
     state.fields.forEach((entry, field) => {
         if (entry.section !== sectionKey) return;
-        if (valueSignature(entry.currentValue) === state.appliedValues.get(field)) return;
+        if (valueSignature(entry.currentValue) === valueSignature(state.appliedValues.get(field))) return;
         applyValueToElements(field, entry.currentValue);
-        state.appliedValues.set(field, valueSignature(entry.currentValue));
+        state.appliedValues.set(field, cloneValue(entry.currentValue));
         count++;
     });
     renderPreview();
@@ -749,9 +755,9 @@ function applySectionToPreview(sectionKey) {
 function applyAllToPreview() {
     let count = 0;
     state.fields.forEach((entry, field) => {
-        if (valueSignature(entry.currentValue) === state.appliedValues.get(field)) return;
+        if (valueSignature(entry.currentValue) === valueSignature(state.appliedValues.get(field))) return;
         applyValueToElements(field, entry.currentValue);
-        state.appliedValues.set(field, valueSignature(entry.currentValue));
+        state.appliedValues.set(field, cloneValue(entry.currentValue));
         count++;
     });
     renderPreview();
@@ -819,8 +825,8 @@ function updateStatus() {
     let dirtyCount = 0, pendingCount = 0;
     state.fields.forEach((entry, field) => {
         const sig = valueSignature(entry.currentValue);
-        if (sig !== state.initialValues.get(field)) dirtyCount++;
-        if (sig !== state.appliedValues.get(field)) pendingCount++;
+        if (sig !== valueSignature(state.initialValues.get(field))) dirtyCount++;
+        if (sig !== valueSignature(state.appliedValues.get(field))) pendingCount++;
     });
 
     const dirtyEl = document.getElementById('status-dirty');
@@ -831,14 +837,241 @@ function updateStatus() {
     pendingEl.classList.toggle('has-pending', pendingCount > 0);
 
     const saveBtn = document.getElementById('save-all');
-    saveBtn.disabled = dirtyCount === 0;
+    saveBtn.disabled = state.saving || dirtyCount === 0;
+    saveBtn.textContent = state.saving ? '저장 중…' : '저장 (commit)';
+
+    const savedEl = document.getElementById('status-saved');
+    if (state.lastSavedAt && savedEl) {
+        savedEl.hidden = false;
+        savedEl.textContent = `마지막 저장: ${formatTime(state.lastSavedAt)}`;
+    }
+}
+
+function formatTime(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 변경 추적 — initialValues vs currentValue 비교 (저장 모달 표시용)
+// ─────────────────────────────────────────────────────────────────
+
+function getChangedFields() {
+    const changes = [];
+    state.fields.forEach((entry, field) => {
+        const initial = state.initialValues.get(field);
+        const current = entry.currentValue;
+        if (valueSignature(initial) === valueSignature(current)) return;
+        changes.push({
+            field,
+            label: FIELD_LABELS[field] || field,
+            prefix: entry.formPrefix,
+            before: initial,
+            after: current,
+            order: entry.order ?? 0,
+        });
+    });
+    changes.sort((a, b) => a.order - b.order);
+    return changes;
+}
+
+// prefix별 변경 표기 — 모달 "이번에 바뀐 항목" 리스트에서 사용
+function describeChange({ label, prefix, before, after }) {
+    switch (prefix) {
+        case 'toggle': {
+            return `${label}: ${before ? '표시' : '숨김'} → ${after ? '표시' : '숨김'}`;
+        }
+        case 'style': {
+            const b = String(before || '(없음)');
+            const a = String(after || '(없음)');
+            return `${label}: ${b} → ${a}`;
+        }
+        case 'image': {
+            const b = (before && typeof before === 'object') ? before : { src: String(before || ''), alt: '' };
+            const a = (after && typeof after === 'object')   ? after  : { src: String(after  || ''), alt: '' };
+            const srcChanged = (b.src || '') !== (a.src || '');
+            const altChanged = (b.alt || '') !== (a.alt || '');
+            if (srcChanged && altChanged) return `${label}: 이미지 + 대체텍스트 수정`;
+            if (srcChanged) return `${label}: 이미지 교체`;
+            if (altChanged) return `${label}: 대체텍스트 수정`;
+            return `${label}: 수정`;
+        }
+        case 'bgimage':
+            return `${label}: 배경 이미지 교체`;
+        case 'html':
+            return `${label}: 본문 수정`;
+        case 'text':
+        case 'tel':
+        case 'email':
+        case 'href': {
+            const b = String(before || '');
+            const a = String(after  || '');
+            const MAX = 40;
+            if (b.length > MAX || a.length > MAX) return `${label}: 수정`;
+            return `${label}: "${b}" → "${a}"`;
+        }
+        default:
+            return `${label}: 수정`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 저장 모달 — 사용자가 Summary(필수) / Description(선택) 직접 입력
+// ─────────────────────────────────────────────────────────────────
+
+function openSaveModal(changes) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <header class="modal-header">
+                    <h2 id="modal-title">변경사항 저장</h2>
+                    <button type="button" class="modal-close" aria-label="닫기" data-action="cancel">×</button>
+                </header>
+                <div class="modal-body">
+                    <section class="modal-section">
+                        <h3>이번에 바뀐 항목 (${changes.length}개)</h3>
+                        <ul class="change-list">
+                            ${changes.map(c => `<li>${escapeHtml(describeChange(c))}</li>`).join('')}
+                        </ul>
+                    </section>
+                    <section class="modal-section">
+                        <label for="commit-summary">Summary <span class="req">*</span></label>
+                        <input id="commit-summary" type="text" maxlength="120" placeholder="예: about 본문 문구 수정" autocomplete="off">
+                        <p class="modal-hint">한 줄, 72자 이내 권장. 무엇을 바꿨는지 짧게.</p>
+                    </section>
+                    <section class="modal-section">
+                        <label for="commit-description">Description (선택)</label>
+                        <textarea id="commit-description" rows="4" placeholder="무엇을 / 왜 바꿨는지 자유롭게 적어주세요"></textarea>
+                    </section>
+                </div>
+                <footer class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-action="cancel">취소</button>
+                    <button type="button" class="btn btn-primary" data-action="save" disabled>저장</button>
+                </footer>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const summaryInput = overlay.querySelector('#commit-summary');
+        const descInput    = overlay.querySelector('#commit-description');
+        const saveBtn      = overlay.querySelector('[data-action="save"]');
+
+        const close = (result) => {
+            overlay.remove();
+            document.removeEventListener('keydown', onKey);
+            resolve(result);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); close(null); }
+            else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                if (!saveBtn.disabled) { e.preventDefault(); saveBtn.click(); }
+            }
+        };
+        document.addEventListener('keydown', onKey);
+
+        summaryInput.addEventListener('input', () => {
+            saveBtn.disabled = !summaryInput.value.trim();
+        });
+        saveBtn.addEventListener('click', () => {
+            close({
+                summary: summaryInput.value.trim(),
+                description: descInput.value.trim(),
+            });
+        });
+        overlay.querySelectorAll('[data-action="cancel"]').forEach(btn => {
+            btn.addEventListener('click', () => close(null));
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close(null);
+        });
+
+        requestAnimationFrame(() => summaryInput.focus());
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 저장 — 모달 확인 후 PUT /api/file → 응답 매핑
+// ─────────────────────────────────────────────────────────────────
+
+async function handleSave() {
+    if (state.saving) return;
+    const changes = getChangedFields();
+    if (changes.length === 0) {
+        toast('변경된 항목이 없습니다');
+        return;
+    }
+
+    // 저장 전에 변경사항을 미리보기 DOM에 한 번 더 일괄 반영 (사용자가 "미리보기 적용" 안 누른 채 저장 눌러도 안전)
+    state.fields.forEach((entry, field) => {
+        if (valueSignature(entry.currentValue) !== valueSignature(state.appliedValues.get(field))) {
+            applyValueToElements(field, entry.currentValue);
+            state.appliedValues.set(field, cloneValue(entry.currentValue));
+        }
+    });
+
+    const modalResult = await openSaveModal(changes);
+    if (!modalResult) return;
+
+    const message = modalResult.description
+        ? `${modalResult.summary}\n\n${modalResult.description}`
+        : modalResult.summary;
+
+    const newHtml = '<!DOCTYPE html>\n' + state.doc.documentElement.outerHTML;
+
+    state.saving = true;
+    updateStatus();
+    try {
+        const res = await fetch(`/api/file/${TARGET_PATH}`, {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: newHtml, sha: state.sha, message }),
+        });
+
+        if (res.status === 409) {
+            const data = await res.json().catch(() => ({}));
+            handleShaConflict(data.message || '다른 곳에서 먼저 저장되었습니다.');
+            return;
+        }
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`(${res.status}) ${text.slice(0, 240) || '저장 실패'}`);
+        }
+
+        const data = await res.json();
+        if (data && typeof data.sha === 'string') state.sha = data.sha;
+
+        // initialValues 갱신 → dirty 0
+        state.fields.forEach((entry, field) => {
+            state.initialValues.set(field, cloneValue(entry.currentValue));
+        });
+        state.lastSavedAt = new Date();
+        refreshAllFieldFlags();
+        renderPreview();
+        toast('저장됨. mujin.im 반영까지 1~3분');
+    } catch (err) {
+        console.error(err);
+        toast(`저장 오류: ${err.message}`);
+    } finally {
+        state.saving = false;
+        updateStatus();
+    }
+}
+
+function handleShaConflict(msg) {
+    const ok = window.confirm(
+        `${msg}\n\n` +
+        '[확인] 누르면 최신 내용을 다시 불러옵니다.\n' +
+        '주의: 지금 입력 중인 변경사항은 사라집니다.'
+    );
+    if (ok) bootstrap();
 }
 
 function bindGlobalControls() {
     document.getElementById('apply-all').addEventListener('click', applyAllToPreview);
-    document.getElementById('save-all').addEventListener('click', () => {
-        toast('저장 후 mujin.im 반영까지 약 1~3분 — 저장 API는 단계 4에서 활성화됩니다');
-    });
+    document.getElementById('save-all').addEventListener('click', handleSave);
 
     document.getElementById('sidebar-toggle').addEventListener('click', () => {
         document.querySelector('.workspace').classList.toggle('sidebar-collapsed');

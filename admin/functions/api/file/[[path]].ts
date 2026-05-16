@@ -56,10 +56,84 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
     });
 };
 
-// PUT 은 4단계에서 활성화 — 일단 stub
-export const onRequestPut: PagesFunction<Env> = async () => {
-    return new Response('PUT is not yet implemented (단계 4에서 활성화 예정)', {
-        status: 501,
+interface PutBody {
+    content?: unknown;
+    sha?: unknown;
+    message?: unknown;
+}
+
+export const onRequestPut: PagesFunction<Env> = async ({ request, params, env }) => {
+    const path = normalizePath(params.path);
+    if (!path) return badRequest('invalid path');
+    if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return serverError('missing GitHub config');
+
+    let body: PutBody;
+    try {
+        body = await request.json();
+    } catch {
+        return badRequest('invalid JSON body');
+    }
+    if (typeof body.content !== 'string') return badRequest('body.content (string) required');
+    if (typeof body.sha !== 'string' || !body.sha) return badRequest('body.sha (string) required');
+
+    const message = typeof body.message === 'string' && body.message.trim()
+        ? body.message
+        : `chore(content): update ${path} via admin`;
+    const branch = env.GITHUB_BRANCH || 'main';
+
+    // utf-8 → base64 (GitHub Contents API 요구)
+    const bytes = new TextEncoder().encode(body.content);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const contentB64 = btoa(bin);
+
+    const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${encodePath(path)}`;
+    const ghRes = await fetch(url, {
+        method: 'PUT',
+        headers: {
+            ...githubHeaders(env.GITHUB_TOKEN),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            message,
+            content: contentB64,
+            sha: body.sha,
+            branch,
+        }),
+    });
+
+    if (ghRes.ok) {
+        const data = await ghRes.json() as {
+            content?: { sha?: string; path?: string };
+            commit?: { sha?: string; message?: string; html_url?: string };
+        };
+        return Response.json({
+            ok: true,
+            path,
+            sha: data.content?.sha,
+            commit: {
+                sha: data.commit?.sha,
+                message: data.commit?.message,
+                url: data.commit?.html_url,
+            },
+        }, {
+            headers: { 'Cache-Control': 'no-store' },
+        });
+    }
+
+    const errText = await ghRes.text();
+    // GitHub은 SHA 불일치 시 보통 409 "Conflict" 또는 422 + "does not match" 메시지로 응답.
+    // 둘 다 admin이 통일된 형태로 해석할 수 있게 409로 정규화한다.
+    if (ghRes.status === 409 || (ghRes.status === 422 && /sha|does not match|expected/i.test(errText))) {
+        return Response.json({
+            error: 'sha_conflict',
+            message: '다른 곳에서 먼저 저장되었습니다. 최신 내용을 다시 불러와 주세요.',
+        }, { status: 409 });
+    }
+    if (ghRes.status === 404) return notFound(path);
+
+    return new Response(`GitHub API error: ${ghRes.status}\n${errText}`, {
+        status: 502,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
 };
