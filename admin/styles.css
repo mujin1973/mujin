@@ -142,8 +142,19 @@ a.site-label:hover {
     white-space: nowrap;
     margin-left: -2px;
 }
-@media (max-width: 1100px) {
+.text-narrow { display: none; }
+
+@media (max-width: 1200px) {
+    .site-label { display: none; }
     .save-hint { display: none; }
+}
+@media (max-width: 1100px) {
+    .btn-manual { display: none; }
+    .btn-deploy { display: none; }
+}
+@media (max-width: 950px) {
+    .text-wide { display: none; }
+    .text-narrow { display: inline; }
 }
 
 /* ─── WORKSPACE ─── */
@@ -1022,4 +1033,6 @@ a.site-label:hover {
     .workspace { grid-template-columns: 100%; }
     .preview-panel { display: none; }
     .topbar-status { display: none; }
+    .btn-history { display: none; }
+    .topbar { grid-template-columns: 1fr auto; gap: 8px; padding: 0 12px; }
 }

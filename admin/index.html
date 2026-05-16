@@ -23,17 +23,20 @@
             </div>
 
             <div class="topbar-right">
-                <a href="/manual" class="btn btn-ghost-light">사용 매뉴얼</a>
+                <a href="/manual" class="btn btn-ghost-light btn-manual">사용 매뉴얼</a>
                 <button type="button" id="logout-btn" class="btn btn-ghost-light">로그아웃</button>
-                <button type="button" id="history-toggle" class="btn btn-ghost-light">배포 이력</button>
-                <button type="button" id="apply-all" class="btn btn-secondary">전체 미리보기 적용</button>
+                <button type="button" id="history-toggle" class="btn btn-ghost-light btn-history">배포 이력</button>
+                <button type="button" id="apply-all" class="btn btn-secondary">
+                    <span class="text-wide">전체 미리보기 적용</span>
+                    <span class="text-narrow">미리보기</span>
+                </button>
                 <button type="button" id="save-all" class="btn btn-primary" disabled
                         title="저장하면 GitHub에 commit → mujin.im 반영까지 약 1~3분 소요">저장</button>
                 <span class="save-hint">≈3분 후 반영</span>
                 <a class="btn btn-ghost-light btn-deploy"
                    href="https://dash.cloudflare.com/0130cd9f8e16ebee893cbb47d8af7c0e/pages/view/mujinmoolsan-landing"
                    target="_blank" rel="noopener noreferrer"
-                   title="Cloudflare Pages에서 mujin.im 배포 진행상황을 확인하세요. 저장 후 새 배포가 'Success'로 표시되면 반영 완료입니다.">
+                   title="Cloudflare Pages에서 mujin.im 배포 진행상황을 확인하세요. 저장 후 최근 배포에 경과 시간(N minutes ago)이 표시되면 반영 완료입니다.">
                     배포 진행상황 <span aria-hidden="true">↗</span>
                 </a>
             </div>

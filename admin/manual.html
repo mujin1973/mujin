@@ -332,11 +332,11 @@
                         </div>
                     </div>
 
-                    <p style="margin-top:20px;">배포가 완료됐는지 확인하려면 상단의 <span class="hl">배포 진행상황</span> 버튼을 클릭하세요. Cloudflare Pages 대시보드가 열리며, 가장 최근 배포의 상태가 <strong>Success</strong>로 바뀌면 반영이 완료된 것입니다.</p>
+                    <p style="margin-top:20px;">배포가 완료됐는지 확인하려면 상단의 <span class="hl">배포 진행상황</span> 버튼을 클릭하세요. Cloudflare Pages 대시보드가 열리며, 가장 최근 배포 항목에 <strong>"2 minutes ago"</strong> 와 같이 경과 시간이 표시되면 반영이 완료된 것입니다. 배포 진행 중일 때는 시간 대신 로딩 상태가 표시됩니다.</p>
 
                     <div class="screenshot-wrap">
                         <img src="images/cloudflare_deploy_status_screenshot.png" alt="Cloudflare 배포 진행상황 화면">
-                        <div class="screenshot-caption">배포 진행상황 화면 — 상태가 Success로 표시되면 반영 완료</div>
+                        <div class="screenshot-caption">배포 진행상황 화면 — 최근 배포에 경과 시간("N minutes ago")이 표시되면 반영 완료</div>
                     </div>
                 </section>
 
@@ -452,26 +452,26 @@
                         <h3>스크립트 관리 카드</h3>
                     </div>
 
-                    <p>랜딩페이지의 <code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">&lt;head&gt;</code> 또는 <code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">&lt;body&gt;</code> 영역에 삽입되는 외부 스크립트를 직접 편집할 수 있습니다.</p>
+                    <p>광고 대행사나 마케팅 담당자에게 전달받은 추적 코드·픽셀 코드를 랜딩페이지에 삽입할 때 사용하는 카드입니다.</p>
 
-                    <div class="alert alert-warning">
-                        <span class="alert-icon">⚠️</span>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">💡</span>
                         <div class="alert-body">
-                            <strong>잘못된 스크립트는 페이지를 망가뜨릴 수 있습니다</strong>
-                            HTML/JavaScript에 익숙하지 않다면 이 카드는 수정하지 않는 것을 권장합니다. 반드시 미리보기로 확인한 뒤 저장하세요.
+                            <strong>주로 이런 경우에 사용합니다</strong>
+                            <ul style="margin-top:6px; padding-left:16px;">
+                                <li>광고 대행사에서 <strong>Meta(페이스북), 카카오, 네이버 광고 픽셀 코드</strong>를 전달받았을 때</li>
+                                <li>Google Analytics, 네이버 애널리틱스 등 <strong>방문자 분석 도구 코드</strong>를 추가할 때</li>
+                                <li>Google Search Console, 네이버 서치어드바이저에서 <strong>사이트 소유권 확인 코드</strong>를 발급받았을 때</li>
+                                <li>카카오톡 채널 상담 버튼, 채팅 위젯 등 <strong>외부 서비스 연동 코드</strong>를 삽입할 때</li>
+                            </ul>
                         </div>
                     </div>
 
                     <div class="alert alert-info" style="margin-top:0;">
-                        <span class="alert-icon">💡</span>
+                        <span class="alert-icon">📋</span>
                         <div class="alert-body">
-                            <strong>언제 수정해야 하나요?</strong>
-                            <ul style="margin-top:6px; padding-left:16px;">
-                                <li>Google Analytics, 네이버 애널리틱스 등 <strong>분석 도구 추적 코드</strong>를 추가·변경할 때</li>
-                                <li>Google Search Console, 네이버 서치어드바이저의 <strong>사이트 소유권 확인 코드</strong>를 삽입할 때</li>
-                                <li>카카오톡 채널 상담 버튼, 채팅 위젯 등 <strong>외부 서비스 플러그인</strong>을 연동할 때</li>
-                                <li>광고 픽셀(Meta, Kakao) 코드를 삽입하거나 업데이트할 때</li>
-                            </ul>
+                            <strong>사용 방법</strong>
+                            담당자에게 전달받은 코드를 그대로 복사해서 붙여넣으면 됩니다. 어디에 넣어야 할지 모르겠다면 담당자에게 <strong>"head에 넣어야 하나요, body에 넣어야 하나요?"</strong>라고 확인 후 해당 영역에 입력하세요. 저장 전 미리보기로 페이지가 정상 표시되는지 확인하는 것을 권장합니다.
                         </div>
                     </div>
                 </section>
