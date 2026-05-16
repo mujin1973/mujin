@@ -110,34 +110,46 @@ async function bootstrap() {
 function buildIndex() {
     state.fields.clear();
     state.cardLists.clear();
+    let order = 0;
 
-    // 1) data-edit="prefix:fieldName"
-    state.doc.querySelectorAll('[data-edit]').forEach(el => {
-        const raw = el.getAttribute('data-edit');
-        const idx = raw.indexOf(':');
-        if (idx === -1) return;
-        const prefix = raw.slice(0, idx);
-        const field = raw.slice(idx + 1);
-        addFieldElement(field, el, prefix);
-    });
-
-    // 2) data-edit-href="fieldName" (toggle 동반)
-    state.doc.querySelectorAll('[data-edit-href]').forEach(el => {
-        const field = el.getAttribute('data-edit-href');
-        addFieldElement(field, el, 'href');
-    });
-
-    // 3) data-edit-list="cards:fieldName"
-    state.doc.querySelectorAll('[data-edit-list]').forEach(el => {
-        const raw = el.getAttribute('data-edit-list');
-        const idx = raw.indexOf(':');
-        if (idx === -1) return;
-        const field = raw.slice(idx + 1);
-        state.cardLists.set(field, {
-            container: el,
-            section: sectionKeyOf(field),
-            items: Array.from(el.querySelectorAll('[data-edit-item]')),
-        });
+    // 단일 쿼리로 doc order 순회 — 한 element가 data-edit + data-edit-href 같이 가질 수 있음.
+    // 폼이 랜딩페이지의 시각 순서와 매칭되도록 첫 등장 순서를 기록.
+    state.doc.querySelectorAll('[data-edit], [data-edit-list], [data-edit-href]').forEach(el => {
+        // data-edit-list="cards:fieldName"
+        if (el.hasAttribute('data-edit-list')) {
+            const raw = el.getAttribute('data-edit-list');
+            const idx = raw.indexOf(':');
+            if (idx !== -1) {
+                const field = raw.slice(idx + 1);
+                if (!state.cardLists.has(field)) {
+                    state.cardLists.set(field, {
+                        order: order++,
+                        container: el,
+                        section: sectionKeyOf(field),
+                        items: Array.from(el.querySelectorAll('[data-edit-item]')),
+                    });
+                }
+            }
+        }
+        // data-edit="prefix:fieldName"
+        if (el.hasAttribute('data-edit')) {
+            const raw = el.getAttribute('data-edit');
+            const idx = raw.indexOf(':');
+            if (idx !== -1) {
+                const prefix = raw.slice(0, idx);
+                const field = raw.slice(idx + 1);
+                if (addFieldElement(field, el, prefix)) {
+                    state.fields.get(field).order = order++;
+                }
+            }
+        }
+        // data-edit-href="fieldName" (toggle 동반)
+        if (el.hasAttribute('data-edit-href')) {
+            const field = el.getAttribute('data-edit-href');
+            if (addFieldElement(field, el, 'href')) {
+                state.fields.get(field).order = order++;
+            }
+        }
     });
 
     // 각 fieldName의 formPrefix 결정 + 초기값 캐싱
@@ -149,10 +161,13 @@ function buildIndex() {
     });
 }
 
+// 새 field entry 생성되면 true, 기존 entry에 prefix만 추가되면 false
 function addFieldElement(field, el, prefix) {
     let entry = state.fields.get(field);
+    const isNew = !entry;
     if (!entry) {
         entry = {
+            order: 0,                       // 호출 측에서 새로 만들 때 채워줌
             section: sectionKeyOf(field),
             prefixes: new Set(),
             elements: [],
@@ -163,6 +178,7 @@ function addFieldElement(field, el, prefix) {
     }
     entry.prefixes.add(prefix);
     entry.elements.push({ el, prefix });
+    return isNew;
 }
 
 function sectionKeyOf(field) {
@@ -366,12 +382,16 @@ function renderSection(sectionKey, fields, cardListFields) {
     const body = document.createElement('div');
     body.className = 'edit-section-body';
 
-    // 일반 필드를 fieldName 알파벳 순서로 정렬 (안정적인 순서)
-    fields.sort();
-    fields.forEach(field => body.appendChild(renderField(field)));
-
-    // 카드 리스트 (read-only placeholder for now)
-    cardListFields.forEach(field => body.appendChild(renderCardListPlaceholder(field)));
+    // doc order로 정렬 — 일반 필드와 카드 리스트를 한 배열에 섞어 정렬 (랜딩 시각 순서 매칭)
+    const items = [
+        ...fields.map(f => ({ kind: 'field', field: f, order: state.fields.get(f).order })),
+        ...cardListFields.map(f => ({ kind: 'card',  field: f, order: state.cardLists.get(f).order })),
+    ];
+    items.sort((a, b) => a.order - b.order);
+    items.forEach(it => {
+        if (it.kind === 'field') body.appendChild(renderField(it.field));
+        else                     body.appendChild(renderCardListPlaceholder(it.field));
+    });
 
     section.appendChild(body);
 
