@@ -66,6 +66,29 @@ const FIELD_LABELS = {
     'contact.blogUrl':           '네이버 블로그 URL',
 };
 
+const FIELD_HINTS = {
+    'meta.title':       '브라우저 탭과 구글·네이버 검색결과에 표시되는 페이지 제목입니다. 20~60자 권장.',
+    'meta.description': '구글·네이버 검색결과에 나오는 설명 문구입니다. 70~160자 권장.',
+    'meta.keywords':    '검색엔진에 전달할 키워드를 쉼표(,)로 구분해 입력하세요. 예: 무진물산, 수산물, 해양수산',
+    'meta.ogImage':     '카카오톡·SNS 공유 시 자동으로 표시되는 대표 이미지입니다.',
+};
+
+// SEO 파일 정의
+const SEO_FILES = [
+    {
+        path: `${SITE}-landing/robots.txt`,
+        filename: 'robots.txt',
+        hint: '검색엔진 크롤러에게 크롤링 허용 범위를 알려주는 파일입니다. 구글서치콘솔·네이버서치어드바이저 등록 시 필요합니다.',
+        defaultContent: `User-agent: *\nAllow: /\nSitemap: https://mujin.im/sitemap.xml`,
+    },
+    {
+        path: `${SITE}-landing/sitemap.xml`,
+        filename: 'sitemap.xml',
+        hint: '사이트 페이지 목록을 검색엔진에 알려주는 파일입니다. 구글서치콘솔에 제출하면 색인 속도가 빨라집니다.',
+        defaultContent: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://mujin.im/</loc>\n    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>`,
+    },
+];
+
 // HTML sanitize 화이트리스트 (html: prefix용)
 const HTML_ALLOWED_TAGS = new Set(['STRONG', 'B', 'EM', 'I', 'BR']);
 
@@ -75,6 +98,7 @@ const HTML_ALLOWED_TAGS = new Set(['STRONG', 'B', 'EM', 'I', 'BR']);
 
 const state = {
     doc: null,                  // 편집 중인 DOM (Document)
+    rawHtml: '',                // 최초 로드된 HTML 문자열 (스크립트 블록 추출용)
     sha: null,                  // GitHub Contents API sha
     fields: new Map(),          // fieldName -> FieldEntry
     cardLists: new Map(),       // fieldName -> CardListEntry
@@ -83,6 +107,11 @@ const state = {
     viewport: 'pc',
     saving: false,
     lastSavedAt: null,
+    scripts: {
+        head: { content: '', initial: '' },
+        body: { content: '', initial: '' },
+    },
+    seoFiles: new Map(),        // path -> { content, sha, initial, saving, defaultContent }
 };
 
 function cloneValue(v) {
@@ -103,7 +132,14 @@ async function bootstrap() {
         const { content, sha } = await res.json();
 
         state.sha = sha;
+        state.rawHtml = content;
         state.doc = new DOMParser().parseFromString(content, 'text/html');
+
+        // 스크립트 블록 초기값
+        state.scripts.head.content = extractScriptBlock(content, 'head');
+        state.scripts.head.initial = state.scripts.head.content;
+        state.scripts.body.content = extractScriptBlock(content, 'body');
+        state.scripts.body.initial = state.scripts.body.content;
 
         buildIndex();
         renderForm();
@@ -111,6 +147,7 @@ async function bootstrap() {
         updateStatus();
 
         bindGlobalControls();
+        loadSeoFiles();
     } catch (err) {
         console.error(err);
         document.getElementById('form-panel-inner').innerHTML = `
@@ -519,19 +556,50 @@ function renderForm() {
         );
         inner.appendChild(section);
     });
+
+    inner.appendChild(renderScriptsSection());
+    inner.appendChild(renderSeoFilesSection());
 }
 
 function renderSection(sectionKey, fields, cardListFields) {
+    const isMeta = sectionKey === 'meta';
+
     const section = document.createElement('section');
     section.className = 'edit-section';
     section.dataset.section = sectionKey;
+    if (isMeta) section.classList.add('is-collapsed');
 
     const header = document.createElement('header');
     header.className = 'edit-section-header';
-    header.innerHTML = `
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'section-title-row';
+    titleRow.innerHTML = `
+        <span class="section-chevron">${isMeta ? '▸' : '▾'}</span>
         <h2>${SECTION_LABELS[sectionKey] || sectionKey}</h2>
-        <button type="button" class="btn btn-ghost btn-sm section-apply">미리보기 적용</button>
     `;
+    header.appendChild(titleRow);
+
+    if (!isMeta) {
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn btn-ghost btn-sm section-apply';
+        applyBtn.textContent = '미리보기 적용';
+        applyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            applySectionToPreview(sectionKey);
+        });
+        header.appendChild(applyBtn);
+    }
+
+    header.style.cursor = 'pointer';
+    header.addEventListener('click', (e) => {
+        if (e.target.closest('.btn')) return;
+        section.classList.toggle('is-collapsed');
+        const chevron = header.querySelector('.section-chevron');
+        if (chevron) chevron.textContent = section.classList.contains('is-collapsed') ? '▸' : '▾';
+    });
+
     section.appendChild(header);
 
     const body = document.createElement('div');
@@ -549,10 +617,6 @@ function renderSection(sectionKey, fields, cardListFields) {
     });
 
     section.appendChild(body);
-
-    header.querySelector('.section-apply').addEventListener('click', () => {
-        applySectionToPreview(sectionKey);
-    });
 
     return section;
 }
@@ -574,6 +638,14 @@ function renderField(field) {
         <span class="field-flags"></span>
     `;
     wrap.appendChild(label);
+
+    const hint = FIELD_HINTS[field];
+    if (hint) {
+        const hintEl = document.createElement('p');
+        hintEl.className = 'field-hint';
+        hintEl.textContent = hint;
+        wrap.appendChild(hintEl);
+    }
 
     const inputEl = createInputForPrefix(field, prefix, entry.currentValue);
     wrap.appendChild(inputEl);
@@ -1222,6 +1294,8 @@ function updateStatus() {
         if (cardListDirty(entry))   dirtyCount++;
         if (cardListPending(entry)) pendingCount++;
     });
+    if (state.scripts.head.content !== state.scripts.head.initial) dirtyCount++;
+    if (state.scripts.body.content !== state.scripts.body.initial) dirtyCount++;
 
     const dirtyEl = document.getElementById('status-dirty');
     const pendingEl = document.getElementById('status-pending');
@@ -1275,6 +1349,13 @@ function getChangedFields() {
             order: entry.order ?? 0,
         });
     });
+    if (state.scripts.head.content !== state.scripts.head.initial) {
+        changes.push({ field: '_scripts.head', label: 'HEAD 스크립트', prefix: 'rawscript', order: 9000 });
+    }
+    if (state.scripts.body.content !== state.scripts.body.initial) {
+        changes.push({ field: '_scripts.body', label: 'BODY 스크립트', prefix: 'rawscript', order: 9001 });
+    }
+
     changes.sort((a, b) => a.order - b.order);
     return changes;
 }
@@ -1327,6 +1408,8 @@ function describeChange({ label, prefix, before, after, cardListEntry }) {
             if (b.length > MAX || a.length > MAX) return `${label}: 수정`;
             return `${label}: "${b}" → "${a}"`;
         }
+        case 'rawscript':
+            return `${label}: 수정됨`;
         default:
             return `${label}: 수정`;
     }
@@ -1441,7 +1524,9 @@ async function handleSave() {
         ? `${modalResult.summary}\n\n${modalResult.description}`
         : modalResult.summary;
 
-    const newHtml = '<!DOCTYPE html>\n' + state.doc.documentElement.outerHTML;
+    let newHtml = '<!DOCTYPE html>\n' + state.doc.documentElement.outerHTML;
+    newHtml = setScriptBlock(newHtml, 'head', state.scripts.head.content);
+    newHtml = setScriptBlock(newHtml, 'body', state.scripts.body.content);
 
     state.saving = true;
     updateStatus();
@@ -1473,6 +1558,8 @@ async function handleSave() {
         state.cardLists.forEach(entry => {
             entry.initialSnapshot = cardsSignature(entry.currentCards);
         });
+        state.scripts.head.initial = state.scripts.head.content;
+        state.scripts.body.initial = state.scripts.body.content;
         state.lastSavedAt = new Date();
         refreshAllFieldFlags();
         renderPreview();
@@ -1538,6 +1625,291 @@ function toast(msg) {
     el.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, 2400);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 스크립트 블록 (HEAD/BODY) 추출/주입
+// ─────────────────────────────────────────────────────────────────
+
+const SCRIPT_MARKERS = {
+    head: 'ADMIN_HEAD_SCRIPTS',
+    body: 'ADMIN_BODY_SCRIPTS',
+};
+
+function extractScriptBlock(html, key) {
+    const marker = SCRIPT_MARKERS[key];
+    const start = `<!-- ${marker}_START -->`;
+    const end   = `<!-- ${marker}_END -->`;
+    const si = html.indexOf(start);
+    const ei = html.indexOf(end);
+    if (si !== -1 && ei > si) return html.slice(si + start.length, ei).trim();
+    return '';
+}
+
+function setScriptBlock(html, key, content) {
+    const marker = SCRIPT_MARKERS[key];
+    const start = `<!-- ${marker}_START -->`;
+    const end   = `<!-- ${marker}_END -->`;
+    const block = content.trim() ? `\n${content.trim()}\n` : '';
+    const si = html.indexOf(start);
+    const ei = html.indexOf(end);
+    if (si !== -1 && ei > si) {
+        return html.slice(0, si + start.length) + block + html.slice(ei);
+    }
+    // 마커 없으면 삽입
+    if (key === 'head') {
+        return html.replace('</head>', `${start}${block}${end}\n</head>`);
+    } else {
+        return html.replace('</body>', `${start}${block}${end}\n</body>`);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 스크립트 관리 섹션 렌더링
+// ─────────────────────────────────────────────────────────────────
+
+function renderScriptsSection() {
+    const section = buildCollapsibleSection('스크립트 관리', true);
+    section.dataset.section = '_scripts';
+
+    const body = section.querySelector('.edit-section-body');
+
+    body.appendChild(buildScriptField(
+        'HEAD 스크립트 — &lt;head&gt; 안에 삽입',
+        'GTM, 구글 애널리틱스, 네이버 Analytics 등 &lt;head&gt;에 들어가는 추적 코드를 붙여넣으세요.',
+        state.scripts.head.content,
+        (v) => { state.scripts.head.content = v; updateStatus(); updateScriptSectionFlag(section); },
+    ));
+
+    body.appendChild(buildScriptField(
+        'BODY 스크립트 — &lt;/body&gt; 바로 앞에 삽입',
+        'GTM noscript 태그, 채널톡, 카카오 픽셀 등 body 하단에 들어가는 스크립트를 붙여넣으세요.',
+        state.scripts.body.content,
+        (v) => { state.scripts.body.content = v; updateStatus(); updateScriptSectionFlag(section); },
+    ));
+
+    return section;
+}
+
+function buildScriptField(labelHtml, hintHtml, initialValue, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+
+    const label = document.createElement('div');
+    label.className = 'field-label';
+    label.innerHTML = `<span>${labelHtml}</span>`;
+    wrap.appendChild(label);
+
+    const hint = document.createElement('p');
+    hint.className = 'field-hint';
+    hint.innerHTML = hintHtml;
+    wrap.appendChild(hint);
+
+    const ta = document.createElement('textarea');
+    ta.className = 'html-input script-input';
+    ta.rows = 5;
+    ta.placeholder = '<!-- 예시: GTM 스니펫 붙여넣기 -->';
+    ta.value = initialValue;
+    ta.addEventListener('input', () => { onChange(ta.value); autoGrow(ta); });
+    autoGrow(ta);
+    wrap.appendChild(ta);
+
+    return wrap;
+}
+
+function updateScriptSectionFlag(section) {
+    const header = section.querySelector('.edit-section-header');
+    if (!header) return;
+    let flag = header.querySelector('.section-flag-dirty');
+    const isDirty = state.scripts.head.content !== state.scripts.head.initial
+                 || state.scripts.body.content !== state.scripts.body.initial;
+    if (isDirty && !flag) {
+        flag = document.createElement('span');
+        flag.className = 'flag flag-dirty section-flag-dirty';
+        flag.textContent = '변경됨';
+        header.querySelector('.section-title-row').appendChild(flag);
+    } else if (!isDirty && flag) {
+        flag.remove();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SEO 파일 섹션 렌더링 (robots.txt / sitemap.xml)
+// ─────────────────────────────────────────────────────────────────
+
+function renderSeoFilesSection() {
+    const section = buildCollapsibleSection('SEO 파일', true);
+    section.dataset.section = '_seofiles';
+
+    const body = section.querySelector('.edit-section-body');
+
+    const intro = document.createElement('p');
+    intro.className = 'field-hint';
+    intro.style.marginBottom = '4px';
+    intro.textContent = '구글서치콘솔·네이버서치어드바이저 등 검색엔진 등록에 필요한 파일을 편집합니다.';
+    body.appendChild(intro);
+
+    SEO_FILES.forEach(({ path, filename, hint, defaultContent }) => {
+        state.seoFiles.set(path, { content: defaultContent, sha: null, initial: null, saving: false, defaultContent });
+        body.appendChild(buildSeoFileCard(path, filename, hint));
+    });
+
+    return section;
+}
+
+function buildSeoFileCard(path, filename, hint) {
+    const card = document.createElement('div');
+    card.className = 'seo-file-card';
+
+    const title = document.createElement('div');
+    title.className = 'seo-file-title';
+    title.innerHTML = `<span class="seo-file-name">${escapeHtml(filename)}</span>`;
+    card.appendChild(title);
+
+    const hintEl = document.createElement('p');
+    hintEl.className = 'field-hint';
+    hintEl.textContent = hint;
+    card.appendChild(hintEl);
+
+    const ta = document.createElement('textarea');
+    ta.className = 'html-input script-input seo-file-textarea';
+    ta.dataset.path = path;
+    ta.rows = 8;
+    ta.value = '불러오는 중…';
+    ta.disabled = true;
+    card.appendChild(ta);
+
+    const footer = document.createElement('div');
+    footer.className = 'seo-file-footer';
+
+    const statusEl = document.createElement('span');
+    statusEl.className = 'seo-file-status';
+    footer.appendChild(statusEl);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-primary btn-sm';
+    saveBtn.textContent = `${filename} 저장`;
+    saveBtn.addEventListener('click', () => saveSeoFile(path, ta, saveBtn, statusEl));
+    footer.appendChild(saveBtn);
+
+    card.appendChild(footer);
+    return card;
+}
+
+async function loadSeoFiles() {
+    for (const { path } of SEO_FILES) {
+        await loadSeoFile(path);
+    }
+}
+
+async function loadSeoFile(path) {
+    const entry = state.seoFiles.get(path);
+    if (!entry) return;
+
+    const ta = document.querySelector(`.seo-file-textarea[data-path="${CSS.escape(path)}"]`);
+
+    try {
+        const res = await fetch(`/api/file/${path}`, { credentials: 'same-origin' });
+        if (res.ok) {
+            const { content, sha } = await res.json();
+            entry.content = content;
+            entry.sha = sha;
+            entry.initial = content;
+            if (ta) ta.value = content;
+        } else if (res.status === 404) {
+            // 신규 파일 — 기본 콘텐츠로 초기화
+            entry.content = entry.defaultContent;
+            entry.sha = '';
+            entry.initial = '';
+            if (ta) ta.value = entry.defaultContent;
+        }
+    } catch (_) {
+        if (ta) ta.value = entry.defaultContent;
+    } finally {
+        if (ta) ta.disabled = false;
+    }
+}
+
+async function saveSeoFile(path, ta, btn, statusEl) {
+    const entry = state.seoFiles.get(path);
+    if (!entry || entry.saving) return;
+
+    entry.content = ta.value;
+    entry.saving = true;
+    btn.disabled = true;
+    btn.textContent = '저장 중…';
+    statusEl.textContent = '';
+
+    try {
+        const res = await fetch(`/api/file/${path}`, {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: ta.value,
+                sha: entry.sha || '',
+                message: `Update ${path.split('/').pop()} via admin`,
+            }),
+        });
+
+        if (!res.ok) {
+            if (res.status === 409) {
+                statusEl.textContent = '저장 충돌 — 페이지를 새로고침 후 다시 시도하세요.';
+                return;
+            }
+            const text = await res.text().catch(() => '');
+            throw new Error(text || `저장 실패 (${res.status})`);
+        }
+
+        const data = await res.json();
+        if (data && data.sha) entry.sha = data.sha;
+        entry.initial = ta.value;
+        statusEl.textContent = '';
+        toast(`${path.split('/').pop()} 저장됨`);
+    } catch (err) {
+        statusEl.textContent = `오류: ${err.message}`;
+    } finally {
+        entry.saving = false;
+        btn.disabled = false;
+        btn.textContent = `${path.split('/').pop()} 저장`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 접을 수 있는 섹션 빌더 (공용)
+// ─────────────────────────────────────────────────────────────────
+
+function buildCollapsibleSection(title, startCollapsed = false) {
+    const section = document.createElement('section');
+    section.className = 'edit-section';
+    if (startCollapsed) section.classList.add('is-collapsed');
+
+    const header = document.createElement('header');
+    header.className = 'edit-section-header';
+    header.style.cursor = 'pointer';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'section-title-row';
+    titleRow.innerHTML = `
+        <span class="section-chevron">${startCollapsed ? '▸' : '▾'}</span>
+        <h2>${escapeHtml(title)}</h2>
+    `;
+    header.appendChild(titleRow);
+
+    header.addEventListener('click', () => {
+        section.classList.toggle('is-collapsed');
+        const chevron = header.querySelector('.section-chevron');
+        if (chevron) chevron.textContent = section.classList.contains('is-collapsed') ? '▸' : '▾';
+    });
+
+    section.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'edit-section-body';
+    section.appendChild(body);
+
+    return section;
 }
 
 // ─────────────────────────────────────────────────────────────────

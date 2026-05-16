@@ -63,6 +63,12 @@ body {
     padding: 4px 10px;
     background: rgba(255, 255, 255, 0.08);
     border-radius: 999px;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+a.site-label:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
 }
 
 .icon-btn {
@@ -757,6 +763,80 @@ body {
     padding: 12px 18px;
     background: var(--surface);
     border-top: 1px solid var(--border);
+}
+
+/* ─── 섹션 접기/펼치기 ─── */
+.section-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+.section-chevron {
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+    user-select: none;
+}
+.edit-section.is-collapsed .edit-section-body {
+    display: none;
+}
+.edit-section.is-collapsed .edit-section-header {
+    border-bottom: none;
+}
+
+/* ─── 필드 힌트 ─── */
+.field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ─── 스크립트 입력 ─── */
+.script-input {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    min-height: 96px;
+}
+
+/* ─── SEO 파일 카드 ─── */
+.seo-file-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.seo-file-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.seo-file-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.seo-file-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.seo-file-status {
+    font-size: 11px;
+    color: var(--danger);
+    flex: 1;
+    min-width: 0;
+}
+.seo-file-textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ─── RESPONSIVE ─── */

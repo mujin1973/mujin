@@ -74,7 +74,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, params, env })
         return badRequest('invalid JSON body');
     }
     if (typeof body.content !== 'string') return badRequest('body.content (string) required');
-    if (typeof body.sha !== 'string' || !body.sha) return badRequest('body.sha (string) required');
+    // sha는 기존 파일 업데이트 시 필수, 새 파일 생성 시 빈 문자열 허용
+    const shaVal = typeof body.sha === 'string' ? body.sha.trim() : '';
 
     const message = typeof body.message === 'string' && body.message.trim()
         ? body.message
@@ -87,6 +88,9 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, params, env })
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
     const contentB64 = btoa(bin);
 
+    const ghPayload: Record<string, unknown> = { message, content: contentB64, branch };
+    if (shaVal) ghPayload.sha = shaVal; // 빈 sha면 신규 파일 생성
+
     const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${encodePath(path)}`;
     const ghRes = await fetch(url, {
         method: 'PUT',
@@ -94,12 +98,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, params, env })
             ...githubHeaders(env.GITHUB_TOKEN),
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            message,
-            content: contentB64,
-            sha: body.sha,
-            branch,
-        }),
+        body: JSON.stringify(ghPayload),
     });
 
     if (ghRes.ok) {
