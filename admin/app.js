@@ -603,15 +603,22 @@ function createInputForPrefix(field, prefix, value) {
                 altInput.value = v.alt || '';
                 altInput.addEventListener('input', () => {
                     const curr = state.fields.get(field).currentValue || { src: '', alt: '' };
+                    // alt 는 일반 텍스트 입력 — "미리보기 적용" 버튼으로 반영 (PLAN §5.2 의 즉시 반영 예외는 업로드 자체에만 적용)
                     onFieldInput(field, { src: curr.src || '', alt: altInput.value });
                 });
                 wrap.appendChild(altInput);
             }
 
-            const note = document.createElement('div');
-            note.className = 'image-upload-btn';
-            note.textContent = '이미지 업로더는 다음 단계에서 활성화됩니다';
-            wrap.appendChild(note);
+            wrap.appendChild(buildUploader(field, {
+                onUploaded: ({ path }) => {
+                    const curr = state.fields.get(field).currentValue || { src: '', alt: '' };
+                    const next = { src: path, alt: (curr && curr.alt) || '' };
+                    applyImageValue(field, next);
+                    // 폼 thumbnail/meta 도 즉시 갱신
+                    thumb.style.backgroundImage = `url('${resolveAssetUrl(path)}')`;
+                    meta.textContent = path;
+                },
+            }));
 
             return wrap;
         }
@@ -669,10 +676,15 @@ function createInputForPrefix(field, prefix, value) {
             current.appendChild(thumb);
             current.appendChild(meta);
             wrap.appendChild(current);
-            const note = document.createElement('div');
-            note.className = 'image-upload-btn';
-            note.textContent = '배경 이미지 업로더는 다음 단계에서 활성화됩니다';
-            wrap.appendChild(note);
+
+            wrap.appendChild(buildUploader(field, {
+                onUploaded: ({ path }) => {
+                    applyImageValue(field, path);
+                    thumb.style.backgroundImage = `url('${resolveAssetUrl(path)}')`;
+                    meta.textContent = path;
+                },
+            }));
+
             return wrap;
         }
         default: {
@@ -730,6 +742,141 @@ function updateFieldFlags(fieldEl, field) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// 이미지 업로더 (image: / bgimage: prefix 공용)
+// ─────────────────────────────────────────────────────────────────
+
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const UPLOAD_ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+
+// PLAN §5.2 — 이미지는 "미리보기 적용" 버튼 없이 즉시 반영. 한 곳에서 처리하기 위한 헬퍼.
+// state.doc 의 img.src 에는 상대경로(path)가 들어가고, 미리보기는 rewriteAssetUrls 가
+// 자동으로 RAW_BASE 를 prefix 로 붙여 raw URL 로 표시.
+function applyImageValue(field, value) {
+    onFieldInput(field, value);
+    applyValueToElements(field, value);
+    state.appliedValues.set(field, cloneValue(value));
+    renderPreview();
+    refreshAllFieldFlags();
+    updateStatus();
+}
+
+function buildUploader(field, { onUploaded }) {
+    const box = document.createElement('div');
+    box.className = 'uploader';
+    box.innerHTML = `
+        <div class="uploader-drop" tabindex="0">
+            <div class="uploader-drop-main">이미지 파일을 끌어다 놓거나 <span class="uploader-link">클릭해서 선택</span></div>
+            <div class="uploader-drop-sub">JPG · PNG · GIF · WEBP · SVG · 최대 5MB</div>
+        </div>
+        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" hidden>
+        <div class="uploader-status" hidden></div>
+    `;
+    const drop = box.querySelector('.uploader-drop');
+    const fileInput = box.querySelector('input[type="file"]');
+    const status = box.querySelector('.uploader-status');
+
+    const showStatus = (msg, kind = 'info') => {
+        status.hidden = false;
+        status.className = `uploader-status uploader-status-${kind}`;
+        status.textContent = msg;
+    };
+    const clearStatus = () => {
+        status.hidden = true;
+        status.textContent = '';
+    };
+
+    const handleFile = async (file) => {
+        const validation = validateImageFile(file);
+        if (validation.error) {
+            showStatus(validation.error, 'error');
+            return;
+        }
+
+        drop.classList.add('is-loading');
+        showStatus(`업로드 중… ${file.name} (${formatBytes(file.size)})`, 'info');
+
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('site', SITE);
+            const res = await fetch('/api/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                throw new Error(text || `업로드 실패 (${res.status})`);
+            }
+            const data = await res.json();
+            if (!data || !data.path) throw new Error('응답에 path 가 없습니다');
+
+            showStatus(`업로드 완료: ${data.path}`, 'ok');
+            onUploaded(data);
+            toast('이미지 업로드 완료 — 미리보기 반영됨');
+        } catch (err) {
+            console.error(err);
+            showStatus(`업로드 실패: ${err.message || err}`, 'error');
+        } finally {
+            drop.classList.remove('is-loading');
+            fileInput.value = ''; // 같은 파일 재선택 가능하도록 reset
+        }
+    };
+
+    // 클릭 → 파일 선택
+    drop.addEventListener('click', () => fileInput.click());
+    drop.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    // 드래그앤드롭
+    ['dragenter', 'dragover'].forEach(ev => {
+        drop.addEventListener(ev, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            drop.classList.add('is-dragover');
+        });
+    });
+    ['dragleave', 'dragend', 'drop'].forEach(ev => {
+        drop.addEventListener(ev, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            drop.classList.remove('is-dragover');
+        });
+    });
+    drop.addEventListener('drop', (e) => {
+        clearStatus();
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) handleFile(f);
+    });
+
+    return box;
+}
+
+function validateImageFile(file) {
+    if (!file) return { error: '파일이 없습니다' };
+    const name = file.name || '';
+    const dot = name.lastIndexOf('.');
+    const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+    if (!UPLOAD_ALLOWED_EXTS.has(ext)) {
+        return { error: `지원하지 않는 확장자: ${ext || '(없음)'}` };
+    }
+    if (file.size === 0) return { error: '빈 파일입니다' };
+    if (file.size > UPLOAD_MAX_BYTES) {
+        return { error: `파일이 너무 큽니다 (${formatBytes(file.size)} > 5MB)` };
+    }
+    return {};
+}
+
+function formatBytes(n) {
+    if (n < 1024) return `${n}B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+    return `${(n / 1024 / 1024).toFixed(2)}MB`;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 미리보기 (iframe srcdoc)
 // ─────────────────────────────────────────────────────────────────
 
@@ -776,6 +923,26 @@ function renderPreview() {
     const iframe = document.getElementById('preview-iframe');
     const clone = state.doc.cloneNode(true);
     rewriteAssetUrls(clone);
+
+    // srcdoc 교체 시 스크롤이 (0,0)으로 리셋되는 문제 — 직전 위치 캡처 후 새 문서 load 시점에 복원.
+    let savedScroll = null;
+    try {
+        const win = iframe.contentWindow;
+        if (win) savedScroll = { x: win.scrollX || 0, y: win.scrollY || 0 };
+    } catch (_) { /* same-origin 차단 시 무시 */ }
+
+    if (savedScroll) {
+        const restore = () => {
+            try { iframe.contentWindow.scrollTo(savedScroll.x, savedScroll.y); } catch (_) {}
+        };
+        iframe.addEventListener('load', function once() {
+            iframe.removeEventListener('load', once);
+            restore();
+            // 레이아웃이 비동기적으로 완성되는 케이스(폰트/이미지) 대비 한 프레임 더 보정
+            requestAnimationFrame(restore);
+        });
+    }
+
     iframe.srcdoc = '<!DOCTYPE html>\n' + clone.documentElement.outerHTML;
 }
 
