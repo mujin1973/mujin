@@ -55,7 +55,6 @@ const FIELD_LABELS = {
     'onlineMall.naver.label':    '네이버몰 라벨',
     'onlineMall.ownMall.bgColor':'자체몰 버튼 색상',
     'onlineMall.naver.bgColor':  '네이버몰 버튼 색상',
-    'onlineMall.gallery':        '갤러리 리스트',
     'related.title':             '섹션 타이틀',
     'related.cards':             '관계회사 카드 리스트',
     'footer.company':            '회사명',
@@ -122,6 +121,52 @@ async function bootstrap() {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// 카드 리스트 헬퍼
+// ─────────────────────────────────────────────────────────────────
+
+let _cardIdSeq = 0;
+function newCardId() { return `card-${++_cardIdSeq}`; }
+
+function extractCardFields(itemEl) {
+    const fields = {};
+    itemEl.querySelectorAll('[data-edit-field]').forEach(el => {
+        const f = el.getAttribute('data-edit-field');
+        if (f === 'img') {
+            fields.img = { src: el.getAttribute('src') || '', alt: el.getAttribute('alt') || '' };
+        }
+    });
+    return fields;
+}
+
+function cardsSignature(cards) {
+    return JSON.stringify(cards.map(c => c.fields));
+}
+
+function applyCardListToDoc(field) {
+    const entry = state.cardLists.get(field);
+    if (!entry || !entry.template) return;
+    const container = entry.container;
+    // 기존 카드(data-edit-item)만 제거 — 비-카드 형제(badges-label 등)는 보존
+    Array.from(container.querySelectorAll('[data-edit-item]')).forEach(el => el.remove());
+    entry.currentCards.forEach(card => {
+        const newEl = entry.template.cloneNode(true);
+        const imgEl = newEl.querySelector('[data-edit-field="img"]');
+        if (imgEl) {
+            imgEl.setAttribute('src', card.fields.img?.src || '');
+            imgEl.setAttribute('alt', card.fields.img?.alt || '');
+        }
+        container.appendChild(newEl);
+    });
+}
+
+function cardListDirty(entry) {
+    return cardsSignature(entry.currentCards) !== entry.initialSnapshot;
+}
+function cardListPending(entry) {
+    return cardsSignature(entry.currentCards) !== entry.appliedSnapshot;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 인덱스 빌드 — doc에서 data-edit* 속성 가진 요소들을 fieldName으로 그룹화
 // ─────────────────────────────────────────────────────────────────
 
@@ -140,11 +185,22 @@ function buildIndex() {
             if (idx !== -1) {
                 const field = raw.slice(idx + 1);
                 if (!state.cardLists.has(field)) {
+                    const items = Array.from(el.querySelectorAll('[data-edit-item]'));
+                    const template = items[0] ? items[0].cloneNode(true) : null;
+                    const currentCards = items.map(it => ({
+                        id: newCardId(),
+                        fields: extractCardFields(it),
+                    }));
+                    const snapshot = cardsSignature(currentCards);
                     state.cardLists.set(field, {
                         order: order++,
                         container: el,
+                        field,
                         section: sectionKeyOf(field),
-                        items: Array.from(el.querySelectorAll('[data-edit-item]')),
+                        template,
+                        currentCards,
+                        initialSnapshot: snapshot,
+                        appliedSnapshot: snapshot,
                     });
                 }
             }
@@ -484,7 +540,7 @@ function renderSection(sectionKey, fields, cardListFields) {
     items.sort((a, b) => a.order - b.order);
     items.forEach(it => {
         if (it.kind === 'field') body.appendChild(renderField(it.field));
-        else                     body.appendChild(renderCardListPlaceholder(it.field));
+        else                     body.appendChild(renderCardList(it.field));
     });
 
     section.appendChild(body);
@@ -696,16 +752,164 @@ function createInputForPrefix(field, prefix, value) {
     }
 }
 
-function renderCardListPlaceholder(field) {
+function renderCardList(field) {
     const entry = state.cardLists.get(field);
+
     const wrap = document.createElement('div');
-    wrap.className = 'card-list-placeholder';
-    wrap.innerHTML = `
-        <strong>${escapeHtml(FIELD_LABELS[field] || field)}</strong>
-        — 현재 ${entry.items.length}개 카드<br>
-        추가/삭제/순서변경은 단계 6에서 활성화됩니다 (SortableJS).
+    wrap.className = 'card-list';
+    wrap.dataset.field = field;
+
+    // 헤더
+    const header = document.createElement('div');
+    header.className = 'card-list-header';
+    header.innerHTML = `
+        <span class="card-list-label">${escapeHtml(FIELD_LABELS[field] || field)}</span>
+        <span class="card-count">${entry.currentCards.length}개</span>
+        <span class="card-list-flags"></span>
     `;
+    wrap.appendChild(header);
+
+    // 아이템 컨테이너 (SortableJS 대상)
+    const list = document.createElement('div');
+    list.className = 'card-list-items';
+    entry.currentCards.forEach(card => list.appendChild(renderCardItem(field, card, list)));
+    wrap.appendChild(list);
+
+    // SortableJS 드래그앤드롭
+    if (typeof Sortable !== 'undefined') {
+        new Sortable(list, {
+            animation: 150,
+            handle: '.card-drag-handle',
+            ghostClass: 'card-ghost',
+            onEnd: () => {
+                // DOM 순서 → currentCards 재정렬
+                const ids = Array.from(list.querySelectorAll('[data-card-id]')).map(el => el.dataset.cardId);
+                entry.currentCards.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+                onCardListChanged(field);
+            },
+        });
+    }
+
+    // 카드 추가 버튼
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-ghost btn-sm card-add-btn';
+    addBtn.textContent = '+ 카드 추가';
+    addBtn.addEventListener('click', () => addCard(field, list));
+    wrap.appendChild(addBtn);
+
     return wrap;
+}
+
+function renderCardItem(field, card, listEl) {
+    const entry = state.cardLists.get(field);
+    const item = document.createElement('div');
+    item.className = 'card-item';
+    item.dataset.cardId = card.id;
+
+    // 드래그 핸들
+    const handle = document.createElement('div');
+    handle.className = 'card-drag-handle';
+    handle.setAttribute('title', '드래그해서 순서 변경');
+    handle.innerHTML = '<span>⠿</span>';
+    item.appendChild(handle);
+
+    // 썸네일
+    const thumb = document.createElement('div');
+    thumb.className = 'image-thumb card-thumb';
+    thumb.style.backgroundImage = `url('${resolveAssetUrl(card.fields.img?.src || '')}')`;
+    item.appendChild(thumb);
+
+    // 입력 영역
+    const inputs = document.createElement('div');
+    inputs.className = 'card-inputs';
+
+    const altInput = document.createElement('input');
+    altInput.type = 'text';
+    altInput.placeholder = '대체 텍스트 (alt)';
+    altInput.value = card.fields.img?.alt || '';
+    altInput.addEventListener('input', () => {
+        if (!card.fields.img) card.fields.img = { src: '', alt: '' };
+        card.fields.img.alt = altInput.value;
+        onCardListChanged(field);
+    });
+    inputs.appendChild(altInput);
+
+    inputs.appendChild(buildUploader(field + ':' + card.id, {
+        onUploaded: ({ path }) => {
+            if (!card.fields.img) card.fields.img = { src: '', alt: altInput.value };
+            card.fields.img.src = path;
+            thumb.style.backgroundImage = `url('${resolveAssetUrl(path)}')`;
+            // 이미지 업로드는 즉시 미리보기 반영 (PLAN §5.2)
+            onCardListChanged(field);
+            applyCardListImmediate(field);
+        },
+    }));
+
+    item.appendChild(inputs);
+
+    // 삭제 버튼
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'card-delete-btn';
+    deleteBtn.setAttribute('title', '카드 삭제');
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', () => deleteCard(field, card.id, item));
+    item.appendChild(deleteBtn);
+
+    return item;
+}
+
+function addCard(field, listEl) {
+    const entry = state.cardLists.get(field);
+    const newCard = { id: newCardId(), fields: { img: { src: '', alt: '' } } };
+    entry.currentCards.push(newCard);
+    listEl.appendChild(renderCardItem(field, newCard, listEl));
+    updateCardListFlags(field);
+    updateStatus();
+}
+
+function deleteCard(field, cardId, itemEl) {
+    const entry = state.cardLists.get(field);
+    if (entry.currentCards.length <= 1) {
+        if (!confirm('마지막 카드입니다. 정말 삭제하시겠습니까?')) return;
+    }
+    entry.currentCards = entry.currentCards.filter(c => c.id !== cardId);
+    itemEl.remove();
+    updateCardListFlags(field);
+    updateStatus();
+}
+
+function onCardListChanged(field) {
+    updateCardListFlags(field);
+    updateStatus();
+}
+
+function updateCardListFlags(field) {
+    const entry = state.cardLists.get(field);
+    if (!entry) return;
+    const wrap = document.querySelector(`.card-list[data-field="${attrValEscape(field)}"]`);
+    if (!wrap) return;
+
+    const flagsEl = wrap.querySelector('.card-list-flags');
+    if (flagsEl) {
+        const dirty   = cardListDirty(entry);
+        const pending = cardListPending(entry);
+        flagsEl.innerHTML = '';
+        if (pending) flagsEl.innerHTML += '<span class="flag flag-pending">미반영</span>';
+        if (dirty)   flagsEl.innerHTML += '<span class="flag flag-dirty">변경됨</span>';
+    }
+    const countEl = wrap.querySelector('.card-count');
+    if (countEl) countEl.textContent = `${entry.currentCards.length}개`;
+}
+
+function applyCardListImmediate(field) {
+    const entry = state.cardLists.get(field);
+    applyCardListToDoc(field);
+    entry.appliedSnapshot = cardsSignature(entry.currentCards);
+    renderPreview();
+    updateCardListFlags(field);
+    updateStatus();
 }
 
 function autoGrow(ta) {
@@ -889,6 +1093,13 @@ function applySectionToPreview(sectionKey) {
         state.appliedValues.set(field, cloneValue(entry.currentValue));
         count++;
     });
+    state.cardLists.forEach((entry, field) => {
+        if (entry.section !== sectionKey) return;
+        if (!cardListPending(entry)) return;
+        applyCardListToDoc(field);
+        entry.appliedSnapshot = cardsSignature(entry.currentCards);
+        count++;
+    });
     renderPreview();
     refreshAllFieldFlags();
     updateStatus();
@@ -907,6 +1118,12 @@ function applyAllToPreview() {
         state.appliedValues.set(field, cloneValue(entry.currentValue));
         count++;
     });
+    state.cardLists.forEach((entry, field) => {
+        if (!cardListPending(entry)) return;
+        applyCardListToDoc(field);
+        entry.appliedSnapshot = cardsSignature(entry.currentCards);
+        count++;
+    });
     renderPreview();
     refreshAllFieldFlags();
     updateStatus();
@@ -917,6 +1134,7 @@ function refreshAllFieldFlags() {
     document.querySelectorAll('.field[data-field]').forEach(el => {
         updateFieldFlags(el, el.dataset.field);
     });
+    state.cardLists.forEach((_, field) => updateCardListFlags(field));
 }
 
 function renderPreview() {
@@ -995,6 +1213,10 @@ function updateStatus() {
         if (sig !== valueSignature(state.initialValues.get(field))) dirtyCount++;
         if (sig !== valueSignature(state.appliedValues.get(field))) pendingCount++;
     });
+    state.cardLists.forEach(entry => {
+        if (cardListDirty(entry))   dirtyCount++;
+        if (cardListPending(entry)) pendingCount++;
+    });
 
     const dirtyEl = document.getElementById('status-dirty');
     const pendingEl = document.getElementById('status-pending');
@@ -1038,13 +1260,36 @@ function getChangedFields() {
             order: entry.order ?? 0,
         });
     });
+    state.cardLists.forEach((entry, field) => {
+        if (!cardListDirty(entry)) return;
+        changes.push({
+            field,
+            label: FIELD_LABELS[field] || field,
+            prefix: 'cards',
+            cardListEntry: entry,
+            order: entry.order ?? 0,
+        });
+    });
     changes.sort((a, b) => a.order - b.order);
     return changes;
 }
 
 // prefix별 변경 표기 — 모달 "이번에 바뀐 항목" 리스트에서 사용
-function describeChange({ label, prefix, before, after }) {
+function describeChange({ label, prefix, before, after, cardListEntry }) {
     switch (prefix) {
+        case 'cards': {
+            const entry = cardListEntry;
+            const initialFields = JSON.parse(entry.initialSnapshot);
+            const currentFields = entry.currentCards.map(c => c.fields);
+            const iCount = initialFields.length;
+            const cCount = currentFields.length;
+            if (iCount !== cCount) return `${label}: ${iCount}개 → ${cCount}개`;
+            // 개수 같을 때 — 순서 변경 vs 내용 수정 판별
+            const initSrcs = initialFields.map(f => f.img?.src || '').sort().join(',');
+            const currSrcs = currentFields.map(f => f.img?.src || '').sort().join(',');
+            if (initSrcs === currSrcs) return `${label}: 순서 변경`;
+            return `${label}: 내용 수정`;
+        }
         case 'toggle': {
             return `${label}: ${before ? '표시' : '숨김'} → ${after ? '표시' : '숨김'}`;
         }
@@ -1177,6 +1422,12 @@ async function handleSave() {
             state.appliedValues.set(field, cloneValue(entry.currentValue));
         }
     });
+    state.cardLists.forEach((entry, field) => {
+        if (cardListPending(entry)) {
+            applyCardListToDoc(field);
+            entry.appliedSnapshot = cardsSignature(entry.currentCards);
+        }
+    });
 
     const modalResult = await openSaveModal(changes);
     if (!modalResult) return;
@@ -1213,6 +1464,9 @@ async function handleSave() {
         // initialValues 갱신 → dirty 0
         state.fields.forEach((entry, field) => {
             state.initialValues.set(field, cloneValue(entry.currentValue));
+        });
+        state.cardLists.forEach(entry => {
+            entry.initialSnapshot = cardsSignature(entry.currentCards);
         });
         state.lastSavedAt = new Date();
         refreshAllFieldFlags();

@@ -426,16 +426,125 @@ body {
     text-transform: lowercase;
 }
 
-.card-list-placeholder {
-    padding: 12px;
-    background: var(--surface-alt);
-    border: 1px dashed var(--border);
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.55;
+/* ─── CARD LIST ─── */
+.card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
-.card-list-placeholder strong { color: var(--text); font-weight: 600; }
+.card-list-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+}
+.card-list-label { flex: 1; min-width: 0; }
+.card-count {
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface-alt);
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-weight: 400;
+}
+.card-list-flags { display: flex; gap: 4px; }
+.card-list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.card-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: box-shadow 0.15s ease;
+}
+.card-item.card-ghost {
+    opacity: 0.4;
+}
+.card-item.sortable-chosen {
+    box-shadow: var(--shadow);
+}
+.card-drag-handle {
+    flex-shrink: 0;
+    width: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    padding-top: 2px;
+    user-select: none;
+}
+.card-drag-handle:active { cursor: grabbing; }
+.card-thumb {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 4px;
+}
+.card-inputs {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.card-inputs input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-inputs input[type="text"]:focus {
+    outline: 0;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--gold-pale);
+}
+.card-inputs .uploader-drop {
+    padding: 8px 10px;
+}
+.card-inputs .uploader-drop-main { font-size: 12px; }
+.card-delete-btn {
+    flex-shrink: 0;
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+.card-delete-btn:hover {
+    color: var(--danger);
+    background: rgba(176, 64, 80, 0.08);
+    border-color: rgba(176, 64, 80, 0.20);
+}
+.card-add-btn {
+    align-self: flex-start;
+    font-size: 12px;
+}
 
 /* ─── PREVIEW PANEL ─── */
 .preview-panel {
