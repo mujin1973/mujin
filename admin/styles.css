@@ -840,6 +840,10 @@ a.site-label:hover {
 }
 
 /* ─── HISTORY PANEL ─── */
+/* [hidden] 속성을 명시적으로 재선언 — display:flex가 UA stylesheet을 덮어쓰는 문제 방지 */
+.history-panel[hidden],
+.history-backdrop[hidden] { display: none; }
+
 .history-backdrop {
     position: fixed;
     inset: 0;

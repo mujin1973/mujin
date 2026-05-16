@@ -156,7 +156,6 @@ async function bootstrap() {
         updateStatus();
 
         bindGlobalControls();
-        bindHistoryControls();
         loadSeoFiles();
     } catch (err) {
         console.error(err);
@@ -2076,4 +2075,5 @@ function formatKSTDate(isoDate) {
 // Go
 // ─────────────────────────────────────────────────────────────────
 
+bindHistoryControls();
 bootstrap();
