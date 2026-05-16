@@ -568,6 +568,22 @@ function renderForm() {
 
     inner.appendChild(renderScriptsSection());
     inner.appendChild(renderSeoFilesSection());
+    inner.appendChild(renderAdminFooter());
+}
+
+function renderAdminFooter() {
+    const el = document.createElement('div');
+    el.className = 'admin-footer';
+    el.innerHTML = `
+        <a class="btn btn-ghost btn-sm admin-pw-btn"
+           href="https://dash.cloudflare.com/0130cd9f8e16ebee893cbb47d8af7c0e/pages/view/mujin-admin/settings/production"
+           target="_blank" rel="noopener noreferrer"
+           title="Cloudflare Pages 설정에서 비밀번호를 변경합니다">
+            🔐 어드민 비밀번호 변경 ↗
+        </a>
+        <a class="admin-manual-link" href="/manual" target="_blank" rel="noopener noreferrer">사용 매뉴얼 ↗</a>
+    `;
+    return el;
 }
 
 function renderSection(sectionKey, fields, cardListFields) {

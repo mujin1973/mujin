@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>사용 매뉴얼 — 무진 어드민</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ── 매뉴얼 전용 스타일 ── */
+        .manual-body {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+
+        .manual-hero {
+            margin-bottom: 40px;
+        }
+        .manual-hero h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+        .manual-hero p {
+            color: var(--text-body);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        /* ── TOC ── */
+        .toc {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            margin-bottom: 40px;
+        }
+        .toc-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+        .toc ol {
+            margin: 0;
+            padding-left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .toc a {
+            color: var(--navy-mid);
+            text-decoration: none;
+            font-size: 13.5px;
+        }
+        .toc a:hover { color: var(--gold); text-decoration: underline; }
+
+        /* ── 섹션 ── */
+        .manual-section {
+            margin-bottom: 48px;
+        }
+        .manual-section + .manual-section {
+            border-top: 1px solid var(--border);
+            padding-top: 48px;
+        }
+
+        .section-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .section-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--navy);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .section-heading h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--navy);
+        }
+
+        .manual-section p,
+        .manual-section li {
+            font-size: 14px;
+            line-height: 1.75;
+            color: var(--text-body);
+        }
+        .manual-section ul,
+        .manual-section ol {
+            padding-left: 20px;
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* ── 경고 박스 ── */
+        .alert {
+            display: flex;
+            gap: 12px;
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin: 16px 0;
+            font-size: 13.5px;
+            line-height: 1.65;
+        }
+        .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+        .alert-body { flex: 1; }
+        .alert-body strong { display: block; margin-bottom: 2px; }
+
+        .alert-warning {
+            background: rgba(201, 142, 48, 0.10);
+            border: 1px solid rgba(201, 142, 48, 0.30);
+            color: #7a4f00;
+        }
+        .alert-info {
+            background: rgba(13, 33, 55, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-body);
+        }
+        .alert-success {
+            background: rgba(45, 138, 92, 0.08);
+            border: 1px solid rgba(45, 138, 92, 0.25);
+            color: #1a5c3c;
+        }
+
+        /* ── 카드 그리드 (섹션 카드 목록) ── */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .card-chip {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+        .card-chip-name {
+            font-weight: 600;
+            color: var(--navy);
+            margin-bottom: 4px;
+        }
+        .card-chip-desc {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        /* ── 스텝 ── */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .step {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .step-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--gold);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .step-body { flex: 1; font-size: 14px; color: var(--text-body); line-height: 1.65; }
+        .step-body strong { color: var(--navy); }
+
+        /* ── 이미지 ── */
+        .screenshot-wrap {
+            margin: 16px 0;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface-alt);
+        }
+        .screenshot-wrap img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .screenshot-caption {
+            font-size: 12px;
+            color: var(--muted);
+            padding: 8px 12px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── 태그 ── */
+        .tag {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--navy);
+            color: #fff;
+            vertical-align: middle;
+        }
+        .tag-gold {
+            background: var(--gold-pale);
+            color: var(--gold);
+        }
+
+        /* ── kbd ── */
+        kbd {
+            display: inline-block;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+        }
+
+        /* ── 링크 ── */
+        .ext-link {
+            color: var(--gold);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .ext-link:hover { text-decoration: underline; }
+
+        /* ── 인라인 강조 ── */
+        .hl {
+            background: var(--gold-pale);
+            color: var(--gold);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="app">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 class="brand">무진 어드민</h1>
+                <a class="site-label" href="https://mujin.im" target="_blank" rel="noopener noreferrer">무진물산 (mujin.im) ↗</a>
+            </div>
+            <div class="topbar-status"></div>
+            <div class="topbar-right">
+                <a href="/admin" class="btn btn-ghost-light">← 어드민으로 돌아가기</a>
+            </div>
+        </header>
+
+        <main class="workspace" style="display:block; overflow-y:auto;">
+            <div class="manual-body">
+
+                <div class="manual-hero">
+                    <h2>어드민 사용 매뉴얼</h2>
+                    <p>무진물산 랜딩페이지(mujin.im) 콘텐츠를 수정하고 배포하는 방법을 안내합니다.</p>
+                </div>
+
+                <!-- TOC -->
+                <nav class="toc" aria-label="목차">
+                    <div class="toc-title">목차</div>
+                    <ol>
+                        <li><a href="#section-save">저장 및 배포 흐름</a></li>
+                        <li><a href="#section-meta">메타 / SEO 카드</a></li>
+                        <li><a href="#section-content">콘텐츠 카드 (기업소개 ~ 푸터)</a></li>
+                        <li><a href="#section-contact">연락처 카드</a></li>
+                        <li><a href="#section-script">스크립트 관리 카드</a></li>
+                        <li><a href="#section-seofiles">SEO 파일 카드</a></li>
+                        <li><a href="#section-history">배포 이력 관리</a></li>
+                        <li><a href="#section-password">어드민 비밀번호 변경</a></li>
+                    </ol>
+                </nav>
+
+                <!-- ────────────────────────────────── 1. 저장 & 배포 -->
+                <section class="manual-section" id="section-save">
+                    <div class="section-heading">
+                        <span class="section-num">1</span>
+                        <h3>저장 및 배포 흐름</h3>
+                    </div>
+
+                    <p>어드민에서 내용을 수정한 뒤에는 반드시 <span class="hl">저장</span> 버튼을 눌러야 랜딩페이지에 반영됩니다. 미리보기에 적용했더라도 저장을 누르지 않으면 실제 사이트에는 아무런 변화가 없습니다.</p>
+
+                    <div class="alert alert-warning" style="margin-top:16px;">
+                        <span class="alert-icon">⚠️</span>
+                        <div class="alert-body">
+                            <strong>저장 후 약 2~3분이 지나야 mujin.im에 반영됩니다</strong>
+                            저장 버튼을 누르면 GitHub에 커밋이 생성되고, Cloudflare Pages가 자동으로 새 배포를 시작합니다. 배포가 완료되기까지 2~3분 소요되며, 그 전에 방문하면 이전 내용이 표시됩니다.
+                        </div>
+                    </div>
+
+                    <div class="steps">
+                        <div class="step">
+                            <span class="step-num">1</span>
+                            <div class="step-body">원하는 카드의 항목을 수정합니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">2</span>
+                            <div class="step-body"><strong>전체 미리보기 적용</strong> 버튼을 눌러 우측 미리보기 화면에서 결과를 확인합니다. (사이트에는 아직 반영되지 않음)</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">3</span>
+                            <div class="step-body">이상이 없으면 상단의 <strong>저장</strong> 버튼을 누릅니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">4</span>
+                            <div class="step-body">2~3분 후 <a class="ext-link" href="https://mujin.im" target="_blank" rel="noopener noreferrer">mujin.im</a>을 새로고침하여 변경 내용을 확인합니다.</div>
+                        </div>
+                    </div>
+
+                    <p style="margin-top:20px;">배포가 완료됐는지 확인하려면 상단의 <span class="hl">배포 진행상황</span> 버튼을 클릭하세요. Cloudflare Pages 대시보드가 열리며, 가장 최근 배포의 상태가 <strong>Success</strong>로 바뀌면 반영이 완료된 것입니다.</p>
+
+                    <div class="screenshot-wrap">
+                        <img src="images/cloudflare_deploy_status_screenshot.png" alt="Cloudflare 배포 진행상황 화면">
+                        <div class="screenshot-caption">배포 진행상황 화면 — 상태가 Success로 표시되면 반영 완료</div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 2. 메타/SEO -->
+                <section class="manual-section" id="section-meta">
+                    <div class="section-heading">
+                        <span class="section-num">2</span>
+                        <h3>메타 / SEO 카드</h3>
+                    </div>
+
+                    <p>검색엔진(구글, 네이버)과 SNS 공유 시 노출되는 정보를 관리합니다. 사이트 방문자 수와 첫인상에 직접 영향을 미치므로, 회사명·주요 사업이 바뀌거나 대표 이미지를 교체할 때 반드시 함께 수정해 주세요.</p>
+
+                    <div class="card-grid" style="margin-top:16px;">
+                        <div class="card-chip">
+                            <div class="card-chip-name">페이지 타이틀</div>
+                            <div class="card-chip-desc">브라우저 탭과 검색결과에 표시되는 제목. 20~60자 권장.</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">메타 설명</div>
+                            <div class="card-chip-desc">검색결과 제목 아래 나오는 설명 문구. 70~160자 권장.</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">키워드</div>
+                            <div class="card-chip-desc">검색엔진에 전달하는 키워드. 쉼표로 구분.</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">OG 이미지</div>
+                            <div class="card-chip-desc">카카오톡·SNS 링크 공유 시 자동으로 표시되는 대표 이미지.</div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:16px;">
+                        <span class="alert-icon">💡</span>
+                        <div class="alert-body">
+                            <strong>언제 수정해야 하나요?</strong>
+                            <ul style="margin-top:6px; padding-left:16px;">
+                                <li>회사명, 주요 사업, 연락처 등 핵심 정보가 변경될 때</li>
+                                <li>검색 노출을 개선하고 싶을 때 (타이틀·설명·키워드 최적화)</li>
+                                <li>SNS/카카오톡에서 링크 공유 시 나오는 이미지나 제목을 바꾸고 싶을 때</li>
+                                <li>대표 이미지(OG 이미지)를 시즌에 맞게 교체할 때</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 3. 콘텐츠 카드 -->
+                <section class="manual-section" id="section-content">
+                    <div class="section-heading">
+                        <span class="section-num">3</span>
+                        <h3>콘텐츠 카드 (기업소개 ~ 푸터)</h3>
+                    </div>
+
+                    <p>랜딩페이지의 각 섹션 내용을 수정하는 카드들입니다. 수정한 항목은 미리보기에서 먼저 확인한 뒤 저장하세요.</p>
+
+                    <div class="card-grid" style="margin-top:16px;">
+                        <div class="card-chip">
+                            <div class="card-chip-name">기업소개</div>
+                            <div class="card-chip-desc">회사 소개 문구, 인용구, 인증·협회 배지 목록</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">컨설팅</div>
+                            <div class="card-chip-desc">컨설팅 섹션 배경 이미지, 타이틀, 설명</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">온라인몰</div>
+                            <div class="card-chip-desc">자체몰·네이버몰 버튼 표시 여부, URL, 라벨, 버튼 색상</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">관계회사</div>
+                            <div class="card-chip-desc">관계회사 카드 목록 (순서 드래그 변경 가능)</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">푸터</div>
+                            <div class="card-chip-desc">회사명, 대표자, 사업자번호, 주소</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 4. 연락처 -->
+                <section class="manual-section" id="section-contact">
+                    <div class="section-heading">
+                        <span class="section-num">4</span>
+                        <h3>연락처 카드</h3>
+                    </div>
+
+                    <p>전화번호, 이메일, 네이버 블로그 URL을 관리합니다. 연락처는 랜딩페이지 내 여러 곳에 공통으로 사용되므로, 이 카드 하나만 수정하면 페이지 전체에 일괄 반영됩니다.</p>
+
+                    <div class="card-grid" style="margin-top:16px;">
+                        <div class="card-chip">
+                            <div class="card-chip-name">전화번호</div>
+                            <div class="card-chip-desc">페이지 내 전화 연결 링크에 공통 적용</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">이메일</div>
+                            <div class="card-chip-desc">페이지 내 이메일 링크에 공통 적용</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">네이버 블로그 URL</div>
+                            <div class="card-chip-desc">블로그 버튼 클릭 시 이동할 주소</div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:16px;">
+                        <span class="alert-icon">📌</span>
+                        <div class="alert-body">연락처가 바뀌었을 때 이 카드만 수정하면 됩니다. 페이지 내 여러 위치에 흩어진 연락처를 따로 찾아 수정할 필요가 없습니다.</div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 5. 스크립트 관리 -->
+                <section class="manual-section" id="section-script">
+                    <div class="section-heading">
+                        <span class="section-num">5</span>
+                        <h3>스크립트 관리 카드</h3>
+                    </div>
+
+                    <p>랜딩페이지의 <code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">&lt;head&gt;</code> 또는 <code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">&lt;body&gt;</code> 영역에 삽입되는 외부 스크립트를 직접 편집할 수 있습니다.</p>
+
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div class="alert-body">
+                            <strong>잘못된 스크립트는 페이지를 망가뜨릴 수 있습니다</strong>
+                            HTML/JavaScript에 익숙하지 않다면 이 카드는 수정하지 않는 것을 권장합니다. 반드시 미리보기로 확인한 뒤 저장하세요.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:0;">
+                        <span class="alert-icon">💡</span>
+                        <div class="alert-body">
+                            <strong>언제 수정해야 하나요?</strong>
+                            <ul style="margin-top:6px; padding-left:16px;">
+                                <li>Google Analytics, 네이버 애널리틱스 등 <strong>분석 도구 추적 코드</strong>를 추가·변경할 때</li>
+                                <li>Google Search Console, 네이버 서치어드바이저의 <strong>사이트 소유권 확인 코드</strong>를 삽입할 때</li>
+                                <li>카카오톡 채널 상담 버튼, 채팅 위젯 등 <strong>외부 서비스 플러그인</strong>을 연동할 때</li>
+                                <li>광고 픽셀(Meta, Kakao) 코드를 삽입하거나 업데이트할 때</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 6. SEO 파일 -->
+                <section class="manual-section" id="section-seofiles">
+                    <div class="section-heading">
+                        <span class="section-num">6</span>
+                        <h3>SEO 파일 카드</h3>
+                    </div>
+
+                    <p><code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">robots.txt</code>와 <code style="font-size:13px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;">sitemap.xml</code> 두 파일을 직접 편집합니다. 검색엔진이 사이트를 올바르게 수집(크롤링)하고 색인하는 데 필요한 파일들입니다.</p>
+
+                    <div class="card-grid" style="margin-top:16px;">
+                        <div class="card-chip">
+                            <div class="card-chip-name">robots.txt</div>
+                            <div class="card-chip-desc">검색엔진 크롤러의 접근 허용 범위를 지정. 구글·네이버 서치콘솔 등록 시 필요.</div>
+                        </div>
+                        <div class="card-chip">
+                            <div class="card-chip-name">sitemap.xml</div>
+                            <div class="card-chip-desc">사이트 페이지 목록을 검색엔진에 알림. 제출 시 색인 속도 향상.</div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:16px;">
+                        <span class="alert-icon">💡</span>
+                        <div class="alert-body">
+                            <strong>언제 수정해야 하나요?</strong>
+                            <ul style="margin-top:6px; padding-left:16px;">
+                                <li>구글서치콘솔 또는 네이버 서치어드바이저에 사이트를 처음 등록할 때</li>
+                                <li>페이지 구조가 바뀌어 sitemap.xml의 URL 목록을 업데이트해야 할 때</li>
+                                <li>특정 경로를 검색엔진에서 숨기거나 다시 허용할 때</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div class="alert-body">SEO 파일 카드의 저장 버튼은 다른 카드들과 <strong>별도로 동작</strong>합니다. SEO 파일을 수정한 뒤에는 해당 카드 안의 저장 버튼을 따로 눌러야 하며, 마찬가지로 2~3분 후 반영됩니다.</div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 7. 배포 이력 -->
+                <section class="manual-section" id="section-history">
+                    <div class="section-heading">
+                        <span class="section-num">7</span>
+                        <h3>배포 이력 관리</h3>
+                    </div>
+
+                    <p>상단 <span class="hl">배포 이력</span> 버튼을 클릭하면 최근 5개의 저장 이력이 표시됩니다. 잘못 수정한 내용이 있을 경우 이전 버전으로 되돌릴 수 있습니다.</p>
+
+                    <div class="steps">
+                        <div class="step">
+                            <span class="step-num">1</span>
+                            <div class="step-body">상단 오른쪽의 <strong>배포 이력</strong> 버튼을 클릭합니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">2</span>
+                            <div class="step-body">오른쪽에서 슬라이드되어 나오는 패널에서 되돌리고 싶은 시점을 선택합니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">3</span>
+                            <div class="step-body">해당 항목의 <strong>이 버전으로 복원</strong> 버튼을 누르면 그 시점의 내용으로 즉시 저장됩니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">4</span>
+                            <div class="step-body">복원 후에도 2~3분 후에 mujin.im에 반영됩니다.</div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:16px;">
+                        <span class="alert-icon">📋</span>
+                        <div class="alert-body">배포 이력은 최근 5개까지만 표시됩니다. 그 이전 내용은 GitHub 저장소의 커밋 히스토리에서 확인할 수 있습니다.</div>
+                    </div>
+                </section>
+
+                <!-- ────────────────────────────────── 8. 비밀번호 변경 -->
+                <section class="manual-section" id="section-password">
+                    <div class="section-heading">
+                        <span class="section-num">8</span>
+                        <h3>어드민 비밀번호 변경</h3>
+                    </div>
+
+                    <p>어드민 로그인 비밀번호는 Cloudflare Pages 대시보드에서 변경합니다. 로그인 유지 기간은 <span class="hl">7일</span>이며, 7일이 지나면 다시 로그인해야 합니다.</p>
+
+                    <div class="alert alert-info">
+                        <span class="alert-icon">📍</span>
+                        <div class="alert-body">
+                            <strong>버튼 위치</strong>
+                            어드민 왼쪽 패널 맨 아래에 <span class="hl">🔐 어드민 비밀번호 변경 ↗</span> 버튼이 있습니다. 클릭하면 아래와 같은 Cloudflare 설정 페이지로 바로 이동합니다.
+                        </div>
+                    </div>
+
+                    <div class="steps">
+                        <div class="step">
+                            <span class="step-num">1</span>
+                            <div class="step-body">아래 링크를 클릭해 Cloudflare Pages 어드민 설정 페이지를 엽니다.<br>
+                                <a class="ext-link" href="https://dash.cloudflare.com/0130cd9f8e16ebee893cbb47d8af7c0e/pages/view/mujin-admin/settings/production" target="_blank" rel="noopener noreferrer">
+                                    Cloudflare Pages — mujin-admin 설정 ↗
+                                </a>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">2</span>
+                            <div class="step-body"><strong>Environment variables</strong> 섹션에서 <kbd>ADMIN_PASSWORD</kbd> 항목을 찾습니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">3</span>
+                            <div class="step-body">항목 오른쪽의 <strong>Rotate</strong> 버튼을 클릭하면 새 비밀번호로 변경할 수 있습니다.</div>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">4</span>
+                            <div class="step-body">변경 후 <strong>Save</strong>를 눌러 저장합니다. 이후 로그인 페이지에서 새 비밀번호로 로그인하세요.</div>
+                        </div>
+                    </div>
+
+                    <div class="screenshot-wrap" style="margin-top:20px;">
+                        <img src="images/admin_password_screenshot1.png" alt="Cloudflare 어드민 설정 화면 1">
+                        <div class="screenshot-caption">Cloudflare Pages 어드민 설정 — Environment variables 섹션</div>
+                    </div>
+
+                    <div class="screenshot-wrap">
+                        <img src="images/admin_password_screenshot2.png" alt="Cloudflare 어드민 설정 화면 2 — Rotate 버튼">
+                        <div class="screenshot-caption">Rotate 버튼을 눌러 새 비밀번호를 생성합니다</div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <span class="alert-icon">🔐</span>
+                        <div class="alert-body">
+                            <strong>로그인 유지 기간: 7일</strong>
+                            로그인 후 7일이 지나면 자동으로 로그아웃되며, 다시 비밀번호를 입력해야 합니다. 보안을 위해 정기적으로 비밀번호를 변경하는 것을 권장합니다.
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+</body>
+</html>
