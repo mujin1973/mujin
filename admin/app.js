@@ -1315,7 +1315,7 @@ function updateStatus() {
 
     const saveBtn = document.getElementById('save-all');
     saveBtn.disabled = state.saving || dirtyCount === 0;
-    saveBtn.textContent = state.saving ? '저장 중…' : '저장 (commit)';
+    saveBtn.textContent = state.saving ? '저장 중…' : '저장';
 
     const savedEl = document.getElementById('status-saved');
     if (state.lastSavedAt && savedEl) {
