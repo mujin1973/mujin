@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>무진 그룹사 콘텐츠 어드민</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app" class="app">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button type="button" id="sidebar-toggle" class="icon-btn" title="좌측 패널 토글" aria-label="사이드바 토글">☰</button>
+                <h1 class="brand">무진 어드민</h1>
+                <span class="site-label">무진물산 (mujin.im)</span>
+            </div>
+
+            <div class="topbar-status">
+                <span class="status-pill status-pill-dirty" id="status-dirty">변경 0</span>
+                <span class="status-pill status-pill-pending" id="status-pending">미반영 0</span>
+                <span class="status-pill status-pill-saved" id="status-saved" hidden>마지막 저장: -</span>
+            </div>
+
+            <div class="topbar-right">
+                <button type="button" id="apply-all" class="btn btn-secondary">전체 미리보기 적용</button>
+                <button type="button" id="save-all" class="btn btn-primary" disabled>저장 (commit)</button>
+            </div>
+        </header>
+
+        <main class="workspace">
+            <aside class="form-panel" id="form-panel">
+                <div class="form-panel-inner" id="form-panel-inner">
+                    <div class="loading">불러오는 중…</div>
+                </div>
+            </aside>
+
+            <section class="preview-panel">
+                <div class="preview-toolbar">
+                    <div class="viewport-toggle" role="group" aria-label="뷰포트 선택">
+                        <button type="button" class="vp-btn active" data-vp="pc">PC 1280</button>
+                        <button type="button" class="vp-btn" data-vp="mobile">모바일 375</button>
+                    </div>
+                    <div class="preview-meta">
+                        <span class="muted">미리보기는 GitHub raw 이미지 기준으로 렌더링됩니다</span>
+                    </div>
+                </div>
+                <div class="preview-stage" id="preview-stage">
+                    <iframe id="preview-iframe" class="preview-iframe vp-pc" title="미리보기" sandbox="allow-same-origin"></iframe>
+                </div>
+            </section>
+        </main>
+
+        <div id="toast" class="toast" hidden></div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
