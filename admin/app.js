@@ -20,7 +20,17 @@ const SECTION_ORDER = Object.keys(SECTION_LABELS);
 
 // 폼 컴포넌트 우선순위 — 같은 fieldName에 prefix가 여럿일 때 어느 것으로 폼을 그릴지
 // (정보량이 큰 컴포넌트가 우선)
-const PREFIX_PRIORITY = ['image', 'bgimage', 'tel', 'email', 'html', 'toggle', 'href', 'text'];
+const PREFIX_PRIORITY = ['image', 'bgimage', 'tel', 'email', 'html', 'toggle', 'href', 'style', 'text'];
+
+// style: prefix용 — fieldName의 마지막 segment에서 CSS property 추론
+// 예: "onlineMall.ownMall.bgColor" → background-color, 폼은 컬러 피커
+const STYLE_PROP_MAP = {
+    bgColor:     { cssProp: 'background-color', input: 'color' },
+    bgcolor:     { cssProp: 'background-color', input: 'color' },
+    textColor:   { cssProp: 'color',            input: 'color' },
+    color:       { cssProp: 'color',            input: 'color' },
+    borderColor: { cssProp: 'border-color',     input: 'color' },
+};
 
 const FIELD_LABELS = {
     'meta.title':                '페이지 타이틀',
@@ -43,6 +53,8 @@ const FIELD_LABELS = {
     'onlineMall.naver':          '네이버몰 버튼 표시',
     'onlineMall.naver.url':      '네이버몰 URL',
     'onlineMall.naver.label':    '네이버몰 라벨',
+    'onlineMall.ownMall.bgColor':'자체몰 버튼 색상',
+    'onlineMall.naver.bgColor':  '네이버몰 버튼 색상',
     'onlineMall.gallery':        '갤러리 리스트',
     'related.title':             '섹션 타이틀',
     'related.cards':             '관계회사 카드 리스트',
@@ -112,9 +124,9 @@ function buildIndex() {
     state.cardLists.clear();
     let order = 0;
 
-    // 단일 쿼리로 doc order 순회 — 한 element가 data-edit + data-edit-href 같이 가질 수 있음.
+    // 단일 쿼리로 doc order 순회 — 한 element가 data-edit + data-edit-href + data-edit-style 같이 가질 수 있음.
     // 폼이 랜딩페이지의 시각 순서와 매칭되도록 첫 등장 순서를 기록.
-    state.doc.querySelectorAll('[data-edit], [data-edit-list], [data-edit-href]').forEach(el => {
+    state.doc.querySelectorAll('[data-edit], [data-edit-list], [data-edit-href], [data-edit-style]').forEach(el => {
         // data-edit-list="cards:fieldName"
         if (el.hasAttribute('data-edit-list')) {
             const raw = el.getAttribute('data-edit-list');
@@ -150,12 +162,19 @@ function buildIndex() {
                 state.fields.get(field).order = order++;
             }
         }
+        // data-edit-style="fieldName" (inline style 일부 property 편집)
+        if (el.hasAttribute('data-edit-style')) {
+            const field = el.getAttribute('data-edit-style');
+            if (addFieldElement(field, el, 'style')) {
+                state.fields.get(field).order = order++;
+            }
+        }
     });
 
     // 각 fieldName의 formPrefix 결정 + 초기값 캐싱
     state.fields.forEach((entry, field) => {
         entry.formPrefix = chooseFormPrefix(entry);
-        entry.currentValue = readValue(entry);
+        entry.currentValue = readValue(entry, field);
         state.initialValues.set(field, valueSignature(entry.currentValue));
         state.appliedValues.set(field, valueSignature(entry.currentValue));
     });
@@ -196,12 +215,12 @@ function chooseFormPrefix(entry) {
 // 값 추출/적용 — prefix별 양방향 매핑
 // ─────────────────────────────────────────────────────────────────
 
-function readValue(entry) {
+function readValue(entry, field) {
     const target = entry.elements.find(e => e.prefix === entry.formPrefix) || entry.elements[0];
-    return extractFromElement(target.el, entry.formPrefix);
+    return extractFromElement(target.el, entry.formPrefix, field);
 }
 
-function extractFromElement(el, prefix) {
+function extractFromElement(el, prefix, field) {
     switch (prefix) {
         case 'text':
             if (el.tagName === 'META') return el.getAttribute('content') || '';
@@ -221,6 +240,10 @@ function extractFromElement(el, prefix) {
             return (el.textContent || '').trim();
         case 'toggle':
             return !el.hasAttribute('hidden');
+        case 'style': {
+            const spec = styleSpecOf(field);
+            return spec ? readInlineStyleProp(el, spec.cssProp) : '';
+        }
         default:
             return '';
     }
@@ -230,11 +253,11 @@ function extractFromElement(el, prefix) {
 function applyValueToElements(field, value) {
     const entry = state.fields.get(field);
     entry.elements.forEach(({ el, prefix }) => {
-        applyOneElement(el, prefix, value);
+        applyOneElement(el, prefix, value, field);
     });
 }
 
-function applyOneElement(el, prefix, value) {
+function applyOneElement(el, prefix, value, field) {
     switch (prefix) {
         case 'text': {
             const v = typeof value === 'string' ? value : '';
@@ -289,7 +312,72 @@ function applyOneElement(el, prefix, value) {
             else el.setAttribute('hidden', '');
             break;
         }
+        case 'style': {
+            const spec = styleSpecOf(field);
+            if (spec) writeInlineStyleProp(el, spec.cssProp, typeof value === 'string' ? value : '');
+            break;
+        }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// style: prefix 헬퍼 — inline style 의 특정 CSS property만 안전하게 읽고 쓰기
+// (다른 inline style 선언은 보존)
+// ─────────────────────────────────────────────────────────────────
+
+function styleSpecOf(field) {
+    const last = field.split('.').pop();
+    return STYLE_PROP_MAP[last] || null;
+}
+
+function readInlineStyleProp(el, cssProp) {
+    if (!cssProp) return '';
+    const style = el.getAttribute('style') || '';
+    const re = new RegExp(`(?:^|;)\\s*${escapeRegex(cssProp)}\\s*:\\s*([^;]+)`, 'i');
+    const m = style.match(re);
+    if (!m) {
+        // background-color 를 다룰 때 background 단축형도 fallback 으로 인식
+        if (cssProp === 'background-color') {
+            const m2 = style.match(/(?:^|;)\s*background\s*:\s*([^;]+)/i);
+            if (m2) return normalizeColor(m2[1].trim());
+        }
+        return '';
+    }
+    return normalizeColor(m[1].trim());
+}
+
+function writeInlineStyleProp(el, cssProp, value) {
+    const style = el.getAttribute('style') || '';
+    // 1) 기존 동일 property 제거 (전체 + 단축형 background까지)
+    let stripped = style
+        .replace(new RegExp(`(?:^|;)\\s*${escapeRegex(cssProp)}\\s*:\\s*[^;]+;?`, 'gi'), ';');
+    if (cssProp === 'background-color') {
+        stripped = stripped.replace(/(?:^|;)\s*background\s*:\s*[^;]+;?/gi, ';');
+    }
+    stripped = stripped.replace(/;+/g, ';').replace(/^;|;$/g, '').trim();
+
+    // 2) 새 값 append
+    const next = value
+        ? (stripped ? `${stripped}; ${cssProp}: ${value}` : `${cssProp}: ${value}`)
+        : stripped;
+    if (next) el.setAttribute('style', next);
+    else el.removeAttribute('style');
+}
+
+// "#FFF" → "#ffffff", "rgb(255,255,255)" → "#ffffff" 등으로 정규화 (input type=color 호환)
+function normalizeColor(s) {
+    s = String(s).trim();
+    if (/^#[0-9a-f]{3}$/i.test(s)) {
+        return '#' + s.slice(1).split('').map(c => c + c).join('').toLowerCase();
+    }
+    if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
+    const m = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+    if (m) return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('').toLowerCase();
+    return s; // 색상 키워드 등은 그대로
+}
+
+function escapeRegex(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function extractBgUrl(el) {
@@ -521,6 +609,45 @@ function createInputForPrefix(field, prefix, value) {
 
             return wrap;
         }
+        case 'style': {
+            const spec = styleSpecOf(field);
+            if (!spec || spec.input !== 'color') {
+                const span = document.createElement('div');
+                span.className = 'muted';
+                span.textContent = `(style: ${field} — 지원되지 않는 형식)`;
+                return span;
+            }
+            const wrap = document.createElement('div');
+            wrap.className = 'color-field';
+            const initial = /^#[0-9a-f]{6}$/i.test(value || '') ? value.toLowerCase() : '#000000';
+            const swatch = document.createElement('input');
+            swatch.type = 'color';
+            swatch.value = initial;
+            swatch.className = 'color-swatch';
+            const hex = document.createElement('input');
+            hex.type = 'text';
+            hex.placeholder = '#RRGGBB';
+            hex.value = initial;
+            hex.className = 'color-hex';
+            hex.maxLength = 7;
+            wrap.appendChild(swatch);
+            wrap.appendChild(hex);
+
+            const commit = (v) => {
+                if (!/^#[0-9a-f]{6}$/i.test(v)) return; // 미완 입력은 무시
+                const lower = v.toLowerCase();
+                if (swatch.value !== lower) swatch.value = lower;
+                if (hex.value.toLowerCase() !== lower) hex.value = lower;
+                onFieldInput(field, lower);
+            };
+            swatch.addEventListener('input', () => commit(swatch.value));
+            hex.addEventListener('input', () => {
+                let v = hex.value.trim();
+                if (v && !v.startsWith('#')) v = '#' + v;
+                if (/^#[0-9a-f]{6}$/i.test(v)) commit(v);
+            });
+            return wrap;
+        }
         case 'bgimage': {
             const wrap = document.createElement('div');
             wrap.className = 'image-field';
@@ -710,7 +837,7 @@ function updateStatus() {
 function bindGlobalControls() {
     document.getElementById('apply-all').addEventListener('click', applyAllToPreview);
     document.getElementById('save-all').addEventListener('click', () => {
-        toast('저장 기능은 다음 단계 (4단계 PUT API)에서 활성화됩니다');
+        toast('저장 후 mujin.im 반영까지 약 1~3분 — 저장 API는 단계 4에서 활성화됩니다');
     });
 
     document.getElementById('sidebar-toggle').addEventListener('click', () => {

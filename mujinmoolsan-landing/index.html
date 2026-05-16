@@ -713,7 +713,6 @@
             display: inline-flex;
             align-items: center;
             gap: 12px;
-            background: #03C75A;
             color: #fff;
             padding: 16px 44px;
             font-family: 'S-CoreDream', sans-serif;
@@ -721,11 +720,11 @@
             font-weight: 400;
             letter-spacing: 0.08em;
             text-decoration: none;
-            transition: background 0.3s, transform 0.3s;
+            transition: filter 0.3s, transform 0.3s;
         }
 
         .btn-navy:hover {
-            background: #02a84b;
+            filter: brightness(0.92);
             transform: translateY(-2px);
         }
 
@@ -1089,13 +1088,13 @@
         <div class="section-label fade-up">온라인몰</div>
         <h2 class="section-title fade-up delay-1" data-edit="html:onlineMall.title">신선한 수산물을<br>온라인으로 만나보세요</h2>
         <div class="mall-cta fade-up delay-2">
-            <a href="#" class="btn-navy" data-edit="toggle:onlineMall.ownMall" data-edit-href="onlineMall.ownMall.url">
+            <a href="#" class="btn-navy" style="background: #03C75A;" data-edit="toggle:onlineMall.ownMall" data-edit-href="onlineMall.ownMall.url" data-edit-style="onlineMall.ownMall.bgColor">
                 <span data-edit="text:onlineMall.ownMall.label">온라인몰 방문하기</span>
                 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 8H15M15 8L9 2M15 8L9 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </a>
-            <a href="https://smartstore.naver.com/mujin1973" target="_blank" rel="noopener" class="btn-navy" data-edit="toggle:onlineMall.naver" data-edit-href="onlineMall.naver.url">
+            <a href="https://smartstore.naver.com/mujin1973" target="_blank" rel="noopener" class="btn-navy" style="background: #03C75A;" data-edit="toggle:onlineMall.naver" data-edit-href="onlineMall.naver.url" data-edit-style="onlineMall.naver.bgColor">
                 <span data-edit="text:onlineMall.naver.label">네이버 스토어 방문하기</span>
                 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 8H15M15 8L9 2M15 8L9 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
